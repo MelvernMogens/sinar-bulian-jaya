@@ -387,32 +387,48 @@ def laporan_harian(request):
     data_nota = []
     
     for n in notas:
-        pembs = Pembayaran.objects.filter(nota=n)
-        
-        if pembs.count() > 1:
-            metode = 'SPLIT'
-            total_bayar = sum([p.nominal for p in pembs])
-        elif pembs.count() == 1:
-            metode = pembs.first().metode
-            total_bayar = pembs.first().nominal
-        else:
-            metode = 'CASH'
-            total_bayar = n.total_bersih
-
-        if n.status_bayar == 'BB' and pembs.count() <= 1:
-            metode = 'BB'
-
+        # Ambil pembayaran original (exclude pelunasan yang dilakukan di hari lain)
+        pembs = list(
+            Pembayaran.objects.filter(nota=n)
+            .exclude(keterangan__in=['Pelunasan BB', 'Pelunasan TF'])
+            .order_by('id')
+        )
+        total_paid = sum([Decimal(str(p.nominal)) for p in pembs])
+        total_bersih_nota = Decimal(str(n.total_bersih))
         jam_lokal = timezone.localtime(n.tanggal).strftime('%H:%M') if n.tanggal else '-'
 
-        data_nota.append({
-            'id': n.id, 
-            'nama_pelanggan': n.pelanggan.nama, 
-            'jam': jam_lokal,
-            'berat_kg': float(n.berat_kg), 
-            'harga_per_kg': float(n.harga_per_kg), 
-            'total_bersih': float(total_bayar), 
-            'metode': metode
-        })
+        # Build rows: 1 row per Pembayaran + 1 row BB kalau ada porsi belum bayar
+        rows = []
+        for p in pembs:
+            rows.append({'metode': p.metode, 'nominal': Decimal(str(p.nominal)), 'pembayaran_id': p.id})
+        if n.status_bayar == 'BB':
+            bb_portion = total_bersih_nota - total_paid
+            if bb_portion > 0:
+                rows.append({'metode': 'BB', 'nominal': bb_portion, 'pembayaran_id': None})
+        # Edge case: gak ada Pembayaran sama sekali & status LUNAS (legacy)
+        if len(rows) == 0:
+            rows.append({'metode': 'CASH', 'nominal': total_bersih_nota, 'pembayaran_id': None})
+
+        total_parts = len(rows)
+        is_split = total_parts > 1
+
+        for idx, r in enumerate(rows):
+            data_nota.append({
+                'id': n.id,
+                'pembayaran_id': r['pembayaran_id'],
+                'nama_pelanggan': n.pelanggan.nama,
+                'jam': jam_lokal,
+                'berat_kg': float(n.berat_kg),
+                'harga_per_kg': float(n.harga_per_kg),
+                'total_bersih': float(r['nominal']),         # nominal per-bagian (untuk display & summing)
+                'total_nota_full': float(total_bersih_nota), # nominal nota utuh (untuk konteks)
+                'metode': r['metode'],
+                'status_bayar': n.status_bayar,
+                'is_split_part': is_split,
+                'split_part_index': idx + 1 if is_split else None,
+                'split_total_parts': total_parts if is_split else None,
+                'is_first_part': idx == 0,
+            })
     
     pengeluaran = Pengeluaran.objects.filter(tanggal=tanggal).order_by('-id')
     kas_masuk = KasGudang.objects.filter(tanggal=tanggal, tipe_mutasi='MASUK').order_by('-id')

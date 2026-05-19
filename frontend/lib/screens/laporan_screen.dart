@@ -457,25 +457,88 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
   Widget _buildNotaCard(Map t) {
     Color badgeColor = t['metode'] == 'BB' ? Colors.red.shade600 : Colors.teal.shade700;
-    
+
     double berat = double.tryParse(t['berat_kg'].toString()) ?? 0;
     double harga = double.tryParse(t['harga_per_kg'].toString()) ?? 0;
     double totalBersihApi = double.tryParse(t['total_bersih'].toString()) ?? 0;
-    
+
+    // Split-part info
+    final bool isSplitPart = t['is_split_part'] == true;
+    final int? splitIdx = t['split_part_index'] is int ? t['split_part_index'] as int : null;
+    final int? splitTotal = t['split_total_parts'] is int ? t['split_total_parts'] as int : null;
+    final double totalNotaFull = double.tryParse((t['total_nota_full'] ?? totalBersihApi).toString()) ?? totalBersihApi;
+
+    // Untuk kalkulasi breakdown (komisi/buruh/materai/kasbon), pakai total nota utuh — bukan nominal per bagian
     double kotor = berat * harga;
     double komisi = (kotor * 0.01 / 1000).ceil() * 1000.0;
     double buruh = (berat * 35 / 1000).ceil() * 1000.0;
     double materai = 6000;
-    
+
     double sisaSebelumKasbon = kotor - komisi - buruh - materai;
     double kasbon = 0;
-    
-    if (totalBersihApi > sisaSebelumKasbon) {
-        materai = 0; 
+
+    if (totalNotaFull > sisaSebelumKasbon) {
+        materai = 0;
         sisaSebelumKasbon = kotor - komisi - buruh;
     }
-    if (sisaSebelumKasbon > totalBersihApi) {
-        kasbon = sisaSebelumKasbon - totalBersihApi;
+    if (sisaSebelumKasbon > totalNotaFull) {
+        kasbon = sisaSebelumKasbon - totalNotaFull;
+    }
+
+    // Split-part: render simplified card (tanpa expandable breakdown)
+    if (isSplitPart) {
+      final String partLabel = (splitIdx != null && splitTotal != null) ? 'BAGIAN $splitIdx/$splitTotal' : 'SPLIT';
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: badgeColor.withOpacity(0.3)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: Icon(Icons.call_split_rounded, color: badgeColor, size: 16),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(t['nama_pelanggan'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                      const SizedBox(width: 6),
+                      Text('#${t['id']}', style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(3)),
+                        child: Text(t['metode'] ?? '-', style: TextStyle(color: badgeColor, fontSize: 9, fontWeight: FontWeight.w900)),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(partLabel, style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 6),
+                      Icon(Icons.access_time_rounded, size: 10, color: Colors.grey.shade500),
+                      const SizedBox(width: 2),
+                      Text(t['jam'] ?? '-', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Text(formatRp(totalBersihApi), style: TextStyle(color: badgeColor, fontWeight: FontWeight.w900, fontSize: 14)),
+          ],
+        ),
+      );
     }
 
     return Container(
@@ -560,12 +623,20 @@ class _LaporanScreenState extends State<LaporanScreen> {
   // =======================================================================
   @override 
   Widget build(BuildContext context) { 
-    double totalKg = 0; 
-    double totalBB = 0; 
-    for (var t in transaksiNota) { 
-      totalKg += double.parse((t['berat_kg'] ?? 0).toString()); 
-      if (t['metode'] == 'BB' || t['status_bayar'] == 'BB') totalBB += double.parse((t['total_bersih'] ?? 0).toString()); 
-    } 
+    double totalKg = 0;
+    double totalBB = 0;
+    for (var t in transaksiNota) {
+      // Berat hanya dihitung pada row pertama (untuk hindari double-count saat split payment)
+      final bool isSplitPart = t['is_split_part'] == true;
+      final bool isFirstPart = t['is_first_part'] != false;
+      if (!isSplitPart || isFirstPart) {
+        totalKg += double.parse((t['berat_kg'] ?? 0).toString());
+      }
+      // BB hanya dihitung pada row dengan metode 'BB' (nominal sudah merupakan porsi BB-nya saja)
+      if (t['metode'] == 'BB') {
+        totalBB += double.parse((t['total_bersih'] ?? 0).toString());
+      }
+    }
 
     bool isDataKosong = transaksiKasMasuk.isEmpty && transaksiNota.isEmpty && transaksiPengeluaran.isEmpty && transaksiKasKeluarLain.isEmpty && transaksiPelunasan.isEmpty;
     
@@ -633,7 +704,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                         onRefresh: fetchLaporan,
                         child: ListView(
                           physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(24, 8, 24, 120), 
+                          padding: EdgeInsets.fromLTRB(24, 8, 24, 160 + MediaQuery.of(context).padding.bottom),
                           children: [
                             if (transaksiKasMasuk.isNotEmpty) ...[
                               _buildSectionHeader('UANG MASUK / TAMBAH SALDO', Colors.green.shade600, Icons.arrow_downward_rounded),
@@ -679,7 +750,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              // Tambah safe-inset bawah biar gak ketutup home indicator / gesture bar
+              padding: EdgeInsets.fromLTRB(24, 20, 24, 32 + MediaQuery.of(context).padding.bottom),
               decoration: BoxDecoration(color: Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(32)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, -10))]),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween, 
