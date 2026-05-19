@@ -466,9 +466,10 @@ class _LaporanScreenState extends State<LaporanScreen> {
     final double totalNotaFull = double.tryParse((g['total_nota_full'] ?? 0).toString()) ?? 0;
     final int notaId = g['id'] is int ? g['id'] as int : int.tryParse((g['id'] ?? '0').toString()) ?? 0;
 
-    // Cek apakah ada BB di dalam payments
-    final bool hasBB = payments.any((p) => p['metode'] == 'BB');
-    final Color headerColor = hasBB ? Colors.red.shade600 : Colors.teal.shade700;
+    // Cek BB & status pelunasan
+    final bool hasUnpaidBB = payments.any((p) => p['metode'] == 'BB' && p['is_lunas'] != true);
+    final bool hasBBLunas = payments.any((p) => p['metode'] == 'BB' && p['is_lunas'] == true);
+    final Color headerColor = hasUnpaidBB ? Colors.red.shade600 : (hasBBLunas ? Colors.green.shade700 : Colors.teal.shade700);
 
     // Breakdown nota (komisi/buruh/materai/kasbon) — pakai total NOTA UTUH
     double kotor = berat * harga;
@@ -485,10 +486,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
       kasbon = sisaSebelumKasbon - totalNotaFull;
     }
 
-    // Build payment summary string utk subtitle (e.g. "CASH 20jt + BB 5jt")
+    // Build payment summary string utk subtitle (e.g. "CASH 20jt + BB 5jt ✓")
     String paymentSummary = payments.map((p) {
       final double n = double.tryParse((p['nominal'] ?? 0).toString()) ?? 0;
-      return '${p['metode']} ${_formatRpShort(n)}';
+      final String metodeLabel = p['metode'] ?? '-';
+      final bool isLunas = p['is_lunas'] == true;
+      final String suffix = (metodeLabel == 'BB' && isLunas) ? ' ✓' : '';
+      return '$metodeLabel ${_formatRpShort(n)}$suffix';
     }).join(' + ');
 
     Color colorForMetode(String? m) {
@@ -606,6 +610,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
                     final p = e.value;
                     final Color cm = colorForMetode(p['metode']);
                     final double nominal = double.tryParse((p['nominal'] ?? 0).toString()) ?? 0;
+                    final bool isLunas = p['is_lunas'] == true;
+                    final String? lunasVia = p['lunas_via']?.toString();
+                    final bool isBBOriginal = p['metode'] == 'BB';
                     return Container(
                       margin: const EdgeInsets.only(top: 6),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -619,19 +626,60 @@ class _LaporanScreenState extends State<LaporanScreen> {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(color: cm.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
-                            child: Icon(iconForMetode(p['metode']), size: 14, color: cm),
+                            child: Icon(
+                              isBBOriginal && isLunas ? Icons.task_alt_rounded : iconForMetode(p['metode']),
+                              size: 14, color: isBBOriginal && isLunas ? Colors.green.shade700 : cm,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(p['metode'] ?? '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: cm)),
+                                Row(
+                                  children: [
+                                    Text(p['metode'] ?? '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: cm)),
+                                    if (isBBOriginal && isLunas) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
+                                        child: Text(
+                                          lunasVia != null && lunasVia.isNotEmpty ? 'DILUNASI via $lunasVia' : 'DILUNASI',
+                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.green.shade900),
+                                        ),
+                                      ),
+                                    ] else if (p['metode'] == 'TRANSFER' && !isLunas) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
+                                        child: Text('PENDING', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.orange.shade900)),
+                                      ),
+                                    ] else if (p['metode'] == 'TRANSFER' && isLunas && lunasVia != null) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
+                                        child: Text('SELESAI', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.green.shade900)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                                 if (isSplit) Text('Bagian ${i + 1} dari ${payments.length}', style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
-                          Text(formatRp(nominal), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: cm)),
+                          Text(
+                            formatRp(nominal),
+                            style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w900,
+                              color: cm,
+                              decoration: isBBOriginal && isLunas ? TextDecoration.lineThrough : TextDecoration.none,
+                              decorationColor: cm.withOpacity(0.5),
+                              decorationThickness: 1.5,
+                            ),
+                          ),
                         ],
                       ),
                     );
@@ -860,8 +908,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
       if (!isSplitPart || isFirstPart) {
         totalKg += double.parse((t['berat_kg'] ?? 0).toString());
       }
-      // BB hanya dihitung pada row dengan metode 'BB' (nominal sudah merupakan porsi BB-nya saja)
-      if (t['metode'] == 'BB') {
+      // BB aktif (belum dilunasi) yang dihitung sebagai utang berjalan
+      if (t['metode'] == 'BB' && t['is_lunas'] != true) {
         totalBB += double.parse((t['total_bersih'] ?? 0).toString());
       }
     }
@@ -886,6 +934,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
         'metode': t['metode'],
         'nominal': t['total_bersih'],
         'pembayaran_id': t['pembayaran_id'],
+        'is_lunas': t['is_lunas'] ?? true,
+        'lunas_via': t['lunas_via'],
       });
     }
     final List<Map<String, dynamic>> groupedNotas = _groupedMap.values.toList();

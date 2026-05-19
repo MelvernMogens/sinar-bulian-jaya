@@ -400,24 +400,46 @@ def laporan_harian(request):
             nominal_p = Decimal(str(p.nominal))
             total_explicit += nominal_p
             if p.keterangan == 'Pelunasan BB':
-                # Pembayaran ini awalnya BB (sekarang sudah dilunasi).
-                # Tampilkan tetap sebagai BB di komposisi asli laporan harian.
-                rows.append({'metode': 'BB', 'nominal': nominal_p, 'pembayaran_id': p.id})
+                # Awalnya BB, sudah dilunasi. Tampilkan tetap BB di komposisi
+                # asli, tapi tandai sudah lunas + via metode apa.
+                rows.append({
+                    'metode': 'BB', 'nominal': nominal_p, 'pembayaran_id': p.id,
+                    'is_lunas': True, 'lunas_via': p.metode,
+                })
+            elif p.keterangan == 'Pelunasan TF':
+                # TF asli yang sudah settle. Tampilkan TRANSFER + flag selesai.
+                rows.append({
+                    'metode': p.metode, 'nominal': nominal_p, 'pembayaran_id': p.id,
+                    'is_lunas': True, 'lunas_via': p.metode,
+                })
             else:
-                # Pembayaran original (CASH/TRANSFER/AMPERA/BB literal),
-                # atau Pelunasan TF (metode tetap TRANSFER).
-                rows.append({'metode': p.metode, 'nominal': nominal_p, 'pembayaran_id': p.id})
+                # Pembayaran original (CASH/TRANSFER/AMPERA/BB literal).
+                # CASH dianggap langsung lunas; TRANSFER yang belum selesai = belum lunas.
+                if p.metode == 'TRANSFER' and not p.is_selesai:
+                    is_lunas = False
+                elif p.metode == 'BB':
+                    is_lunas = False
+                else:
+                    is_lunas = True
+                rows.append({
+                    'metode': p.metode, 'nominal': nominal_p, 'pembayaran_id': p.id,
+                    'is_lunas': is_lunas, 'lunas_via': None,
+                })
 
-        # Implied BB: porsi yang tidak ada Pembayaran-nya sama sekali (mis. nota
-        # pure BB yang belum pernah dibuatkan record Pembayaran, atau split di
-        # mana BB-nya gak punya row Pembayaran).
+        # Implied BB: porsi tanpa Pembayaran sama sekali → belum lunas
         implied_bb = total_bersih_nota - total_explicit
         if implied_bb > 0:
-            rows.append({'metode': 'BB', 'nominal': implied_bb, 'pembayaran_id': None})
+            rows.append({
+                'metode': 'BB', 'nominal': implied_bb, 'pembayaran_id': None,
+                'is_lunas': False, 'lunas_via': None,
+            })
 
-        # Edge case fallback: tidak ada satu pun row (data corrupt) → CASH full
+        # Edge case fallback
         if len(rows) == 0:
-            rows.append({'metode': 'CASH', 'nominal': total_bersih_nota, 'pembayaran_id': None})
+            rows.append({
+                'metode': 'CASH', 'nominal': total_bersih_nota, 'pembayaran_id': None,
+                'is_lunas': True, 'lunas_via': 'CASH',
+            })
 
         total_parts = len(rows)
         is_split = total_parts > 1
@@ -430,14 +452,16 @@ def laporan_harian(request):
                 'jam': jam_lokal,
                 'berat_kg': float(n.berat_kg),
                 'harga_per_kg': float(n.harga_per_kg),
-                'total_bersih': float(r['nominal']),         # nominal per-bagian (untuk display & summing)
-                'total_nota_full': float(total_bersih_nota), # nominal nota utuh (untuk konteks)
+                'total_bersih': float(r['nominal']),
+                'total_nota_full': float(total_bersih_nota),
                 'metode': r['metode'],
                 'status_bayar': n.status_bayar,
                 'is_split_part': is_split,
                 'split_part_index': idx + 1 if is_split else None,
                 'split_total_parts': total_parts if is_split else None,
                 'is_first_part': idx == 0,
+                'is_lunas': r.get('is_lunas', True),
+                'lunas_via': r.get('lunas_via'),  # 'CASH' / 'TRANSFER' kalo dilunasi
             })
     
     pengeluaran = Pengeluaran.objects.filter(tanggal=tanggal).order_by('-id')
