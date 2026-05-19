@@ -79,6 +79,152 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
     return parsed.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
   }
 
+  // --- BOTTOM SHEET: PILIH/UBAH LOT PABRIK UNTUK PENGIRIMAN ---
+  Future<void> _pilihLotUntukPengiriman(dynamic pengirimanId, dynamic currentLotId, String currentLotName) async {
+    List lots = [];
+    try {
+      final res = await http.get(Uri.parse('${AppConfig.baseUrl}/api/lot/'));
+      if (res.statusCode == 200) {
+        final all = json.decode(res.body) as List;
+        // Tampilkan semua yang belum selesai + lot yang sedang dipakai (meski sudah selesai)
+        lots = all.where((l) => l['is_selesai'] != true || l['id'].toString() == currentLotId?.toString()).toList();
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    String? selectedLotId = currentLotId?.toString();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + MediaQuery.of(ctx).padding.bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)), margin: const EdgeInsets.only(bottom: 16))),
+                const Text('Ubah Lot Pabrik', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 4),
+                Text('Pilih lot tujuan untuk wadah ini.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                const SizedBox(height: 16),
+
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      _buildLotOptionTile(
+                        ctx: ctx,
+                        label: 'Tanpa Lot',
+                        subtitle: 'Lepaskan dari lot manapun',
+                        isSelected: selectedLotId == null,
+                        onTap: () => setSheet(() => selectedLotId = null),
+                        color: Colors.grey.shade700,
+                      ),
+                      if (lots.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: Text('Belum ada lot. Buat lot di menu Lot Pabrik dulu.', style: TextStyle(color: Colors.grey.shade500, fontSize: 12), textAlign: TextAlign.center)),
+                        ),
+                      ...lots.map((l) => _buildLotOptionTile(
+                        ctx: ctx,
+                        label: l['nama_lot'] ?? '-',
+                        subtitle: 'Pabrik: ${l['pabrik'] ?? '-'}${l['is_selesai'] == true ? '  (selesai)' : ''}',
+                        isSelected: selectedLotId == l['id'].toString(),
+                        onTap: () => setSheet(() => selectedLotId = l['id'].toString()),
+                        color: Colors.teal.shade700,
+                      )),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal.shade700,
+                      foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: const Text('Simpan Lot', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      try {
+                        final prefs = await SharedPreferences.getInstance();
+                        final currentUsername = prefs.getString('username') ?? 'Sistem';
+                        final res = await http.post(
+                          Uri.parse('${AppConfig.baseUrl}/api/pengiriman/edit_pabrik/'),
+                          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+                          body: json.encode({
+                            'pengiriman_id': pengirimanId,
+                            'lot_id': selectedLotId,
+                            'username': currentUsername,
+                          }),
+                        );
+                        if (!mounted) return;
+                        if (res.statusCode == 200) {
+                          showCustomSnackbar(context, 'Lot berhasil diperbarui!');
+                          fetchLaporan();
+                        } else {
+                          showCustomSnackbar(context, 'Gagal update lot.', isError: true);
+                        }
+                      } catch (_) {
+                        if (mounted) showCustomSnackbar(context, 'Koneksi ke server gagal!', isError: true);
+                      }
+                    },
+                  ),
+                )
+              ],
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  Widget _buildLotOptionTile({required BuildContext ctx, required String label, required String subtitle, required bool isSelected, required VoidCallback onTap, required Color color}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isSelected ? color.withOpacity(0.08) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isSelected ? color : Colors.grey.shade200, width: isSelected ? 1.5 : 1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded, color: isSelected ? color : Colors.grey.shade400, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSelected ? color : Colors.black87)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // --- DIALOG EDIT MUATAN SULTAN ---
   void _editMuatanDialog(Map item) {
     String tonaseAwal = item['tonase']?.toString() ?? '0';
@@ -349,7 +495,40 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                           title: Text(p['judul'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Text('Tonase: ${p['total_tonase']} Kg • Lot: ${p['nama_lot'] ?? '-'}\nOmset: ${formatRp(p['total_uang'])}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12, height: 1.4, fontWeight: FontWeight.w500)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Tonase: ${p['total_tonase']} Kg  •  Omset: ${formatRp(p['total_uang'])}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12, height: 1.4, fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 4),
+                                InkWell(
+                                  onTap: () => _pilihLotUntukPengiriman(p['id'], p['lot_id'], p['nama_lot']),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: (p['lot_id'] == null) ? Colors.amber.shade50 : Colors.teal.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: (p['lot_id'] == null) ? Colors.amber.shade200 : Colors.teal.shade200),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          (p['lot_id'] == null) ? Icons.add_circle_outline_rounded : Icons.edit_location_alt_rounded,
+                                          size: 12,
+                                          color: (p['lot_id'] == null) ? Colors.amber.shade900 : Colors.teal.shade700,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          (p['lot_id'] == null) ? 'Set Lot Pabrik' : 'Lot: ${p['nama_lot']}',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: (p['lot_id'] == null) ? Colors.amber.shade900 : Colors.teal.shade800),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           iconColor: colorPrimary,
                           collapsedIconColor: Colors.grey.shade400,

@@ -666,7 +666,7 @@ def laporan_pengiriman(request):
             t_tonase = sum([i.tonase for i in items]) if items else Decimal('0')
             t_uang = sum([i.total_harga for i in items]) if items else Decimal('0')
             detail_items = [{'id': i.id, 'nama': i.nama_tujuan, 'tonase': float(i.tonase), 'harga': float(i.harga_input), 'harga_jual': float(i.harga_jual), 'total': float(i.total_harga)} for i in items]
-            data.append({'id': p.id, 'tipe': p.tipe, 'judul': p.plat_mobil if p.tipe == 'KIRIM' else p.nama_stock, 'tanggal': p.tanggal.strftime('%d-%m-%Y'), 'total_tonase': float(t_tonase), 'total_uang': float(t_uang), 'items': detail_items, 'nama_lot': p.lot.nama_lot if p.lot else '-'})
+            data.append({'id': p.id, 'tipe': p.tipe, 'judul': p.plat_mobil if p.tipe == 'KIRIM' else p.nama_stock, 'tanggal': p.tanggal.strftime('%d-%m-%Y'), 'total_tonase': float(t_tonase), 'total_uang': float(t_uang), 'items': detail_items, 'nama_lot': p.lot.nama_lot if p.lot else '-', 'lot_id': p.lot_id})
         return data
     return JsonResponse({'terkirim': serialize_pengiriman(terkirim_qs), 'stock_aktif': serialize_pengiriman(stock_qs)})
 
@@ -753,18 +753,44 @@ def edit_pengiriman_pabrik(request):
         data = json.loads(request.body)
         try:
             p = Pengiriman.objects.get(id=data['pengiriman_id'])
-            old_tonase = p.tonase_pabrik
-            new_tonase = Decimal(str(data.get('tonase_pabrik', 0)))
-            
-            p.tonase_pabrik = new_tonase
-            p.save()
-            
+            judul_truk = p.plat_mobil if p.tipe == 'KIRIM' else p.nama_stock
             username = data.get('username')
-            if username and old_tonase != new_tonase:
-                editor = User.objects.filter(username=username).first()
-                judul_truk = p.plat_mobil if p.tipe == 'KIRIM' else p.nama_stock
-                LogAktivitas.objects.create(user=editor, modul='Pengiriman (Pabrik)', aksi='EDIT', keterangan=f"Input Tonase Pabrik Truk [{judul_truk}]: {old_tonase} Kg -> {new_tonase} Kg")
-                
+            editor = User.objects.filter(username=username).first() if username else None
+            log_changes = []
+
+            # Update tonase pabrik (kalau dikirim)
+            if 'tonase_pabrik' in data:
+                old_tonase = p.tonase_pabrik
+                new_tonase = Decimal(str(data.get('tonase_pabrik', 0)))
+                if old_tonase != new_tonase:
+                    p.tonase_pabrik = new_tonase
+                    log_changes.append(f"Tonase Pabrik: {old_tonase} Kg -> {new_tonase} Kg")
+
+            # Assign / ganti lot (kalau dikirim — termasuk null = lepas lot)
+            if 'lot_id' in data:
+                old_lot_name = p.lot.nama_lot if p.lot_id else '-'
+                lot_id = data.get('lot_id')
+                if lot_id in (None, '', 'null'):
+                    p.lot = None
+                    new_lot_name = '-'
+                else:
+                    try:
+                        lot_obj = LotPabrik.objects.get(id=lot_id, is_selesai=False)
+                        p.lot = lot_obj
+                        new_lot_name = lot_obj.nama_lot
+                    except LotPabrik.DoesNotExist:
+                        return JsonResponse({'status': 'gagal', 'pesan': 'Lot tidak ditemukan atau sudah selesai.'}, status=400)
+                if old_lot_name != new_lot_name:
+                    log_changes.append(f"Lot: [{old_lot_name}] -> [{new_lot_name}]")
+
+            p.save()
+
+            if editor and log_changes:
+                LogAktivitas.objects.create(
+                    user=editor, modul='Pengiriman (Pabrik)', aksi='EDIT',
+                    keterangan=f"Edit [{judul_truk}]: " + '; '.join(log_changes)
+                )
+
             return JsonResponse({'status': 'sukses'})
         except Pengiriman.DoesNotExist:
             return JsonResponse({'status': 'error'}, status=404)

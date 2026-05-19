@@ -455,6 +455,234 @@ class _LaporanScreenState extends State<LaporanScreen> {
     );
   }
 
+  // === BUILDER BARU: 1 CARD PER NOTA (group split payment di dalam 1 card) ===
+  Widget _buildNotaCardGrouped(Map g) {
+    final List payments = g['payments'] ?? [];
+    final bool isSplit = payments.length > 1;
+    final String namaPelanggan = g['nama_pelanggan'] ?? '-';
+    final String jam = g['jam'] ?? '-';
+    final double berat = double.tryParse((g['berat_kg'] ?? 0).toString()) ?? 0;
+    final double harga = double.tryParse((g['harga_per_kg'] ?? 0).toString()) ?? 0;
+    final double totalNotaFull = double.tryParse((g['total_nota_full'] ?? 0).toString()) ?? 0;
+    final int notaId = g['id'] is int ? g['id'] as int : int.tryParse((g['id'] ?? '0').toString()) ?? 0;
+
+    // Cek apakah ada BB di dalam payments
+    final bool hasBB = payments.any((p) => p['metode'] == 'BB');
+    final Color headerColor = hasBB ? Colors.red.shade600 : Colors.teal.shade700;
+
+    // Breakdown nota (komisi/buruh/materai/kasbon) — pakai total NOTA UTUH
+    double kotor = berat * harga;
+    double komisi = (kotor * 0.01 / 1000).ceil() * 1000.0;
+    double buruh = (berat * 35 / 1000).ceil() * 1000.0;
+    double materai = 6000;
+    double sisaSebelumKasbon = kotor - komisi - buruh - materai;
+    double kasbon = 0;
+    if (totalNotaFull > sisaSebelumKasbon) {
+      materai = 0;
+      sisaSebelumKasbon = kotor - komisi - buruh;
+    }
+    if (sisaSebelumKasbon > totalNotaFull) {
+      kasbon = sisaSebelumKasbon - totalNotaFull;
+    }
+
+    // Build payment summary string utk subtitle (e.g. "CASH 20jt + BB 5jt")
+    String paymentSummary = payments.map((p) {
+      final double n = double.tryParse((p['nominal'] ?? 0).toString()) ?? 0;
+      return '${p['metode']} ${_formatRpShort(n)}';
+    }).join(' + ');
+
+    Color colorForMetode(String? m) {
+      switch (m) {
+        case 'BB': return Colors.red.shade600;
+        case 'TRANSFER': return Colors.blue.shade700;
+        case 'AMPERA': return Colors.purple.shade700;
+        default: return Colors.green.shade700; // CASH
+      }
+    }
+
+    IconData iconForMetode(String? m) {
+      switch (m) {
+        case 'BB': return Icons.warning_amber_rounded;
+        case 'TRANSFER': return Icons.account_balance_rounded;
+        case 'AMPERA': return Icons.swap_horiz_rounded;
+        default: return Icons.payments_rounded; // CASH
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: headerColor.withOpacity(0.3)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: headerColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            child: Icon(Icons.receipt_rounded, color: headerColor, size: 20),
+          ),
+          title: Text(namaPelanggan, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.access_time_rounded, size: 12, color: Colors.grey.shade500),
+                    const SizedBox(width: 4),
+                    Text(jam, style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    if (isSplit)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(4)),
+                        child: Text('SPLIT ${payments.length}x', style: TextStyle(color: Colors.amber.shade900, fontSize: 9, fontWeight: FontWeight.w900)),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: headerColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                        child: Text(payments.first['metode'] ?? '-', style: TextStyle(color: headerColor, fontSize: 9, fontWeight: FontWeight.w900)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(paymentSummary, style: TextStyle(color: Colors.grey.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          trailing: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(formatRp(totalNotaFull), style: TextStyle(color: headerColor, fontWeight: FontWeight.w900, fontSize: 14)),
+              if (isSplit) Text('Total Nota', style: TextStyle(fontSize: 8, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16))),
+              child: Column(
+                children: [
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('No. Nota', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('#$notaId', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
+                  const SizedBox(height: 6),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Berat', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('${berat.toStringAsFixed(1)} Kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
+                  const SizedBox(height: 6),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Harga/Kg', style: TextStyle(fontSize: 12, color: Colors.black54)), Text(formatRp(harga), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
+
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: Colors.black12)),
+
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Total Kotor', style: TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w600)), Text(formatRp(kotor), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900))]),
+                  if (komisi > 0) const SizedBox(height: 6),
+                  if (komisi > 0) Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Pot. Komisi', style: TextStyle(fontSize: 12, color: Colors.red.shade400)), Text('- ${formatRp(komisi)}', style: TextStyle(fontSize: 12, color: Colors.red.shade600, fontWeight: FontWeight.bold))]),
+                  if (buruh > 0) const SizedBox(height: 6),
+                  if (buruh > 0) Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Pot. Buruh', style: TextStyle(fontSize: 12, color: Colors.red.shade400)), Text('- ${formatRp(buruh)}', style: TextStyle(fontSize: 12, color: Colors.red.shade600, fontWeight: FontWeight.bold))]),
+                  if (materai > 0) const SizedBox(height: 6),
+                  if (materai > 0) Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Pot. Materai', style: TextStyle(fontSize: 12, color: Colors.red.shade400)), Text('- ${formatRp(materai)}', style: TextStyle(fontSize: 12, color: Colors.red.shade600, fontWeight: FontWeight.bold))]),
+                  if (kasbon > 0) const SizedBox(height: 6),
+                  if (kasbon > 0) Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Pot. Kasbon', style: TextStyle(fontSize: 12, color: Colors.red.shade400)), Text('- ${formatRp(kasbon)}', style: TextStyle(fontSize: 12, color: Colors.red.shade600, fontWeight: FontWeight.bold))]),
+
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: Colors.black12)),
+
+                  // PAYMENT BREAKDOWN
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text('Komposisi Pembayaran', style: TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w600)),
+                    if (isSplit) Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(4)),
+                      child: Text('${payments.length} BAGIAN', style: TextStyle(color: Colors.amber.shade900, fontSize: 9, fontWeight: FontWeight.w900)),
+                    ),
+                  ]),
+                  const SizedBox(height: 6),
+                  ...payments.asMap().entries.map((e) {
+                    final i = e.key;
+                    final p = e.value;
+                    final Color cm = colorForMetode(p['metode']);
+                    final double nominal = double.tryParse((p['nominal'] ?? 0).toString()) ?? 0;
+                    return Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: cm.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: cm.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(color: cm.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                            child: Icon(iconForMetode(p['metode']), size: 14, color: cm),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(p['metode'] ?? '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: cm)),
+                                if (isSplit) Text('Bagian ${i + 1} dari ${payments.length}', style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
+                          Text(formatRp(nominal), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: cm)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(foregroundColor: Colors.teal.shade700, side: BorderSide(color: Colors.teal.shade200), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                          icon: const Icon(Icons.edit_note_rounded, size: 16),
+                          label: const Text('Edit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () => _tampilkanDialogEditNota(notaId, namaPelanggan, berat, harga, totalNotaFull),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                          icon: const Icon(Icons.print_rounded, size: 16),
+                          label: const Text('Cetak Ulang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () => _tampilkanDialogCetakUlang({
+                            'id': notaId,
+                            'nama_pelanggan': namaPelanggan,
+                            'jam': jam,
+                            'metode': isSplit ? 'SPLIT' : (payments.first['metode'] ?? 'CASH'),
+                            'berat_kg': berat,
+                            'harga_per_kg': harga,
+                            'total_bersih': totalNotaFull,
+                          }),
+                        ),
+                      )
+                    ],
+                  )
+                ],
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatRpShort(double n) {
+    if (n >= 1000000) return 'Rp${(n / 1000000).toStringAsFixed(n % 1000000 == 0 ? 0 : 1)}jt';
+    if (n >= 1000) return 'Rp${(n / 1000).toStringAsFixed(0)}rb';
+    return 'Rp${n.toStringAsFixed(0)}';
+  }
+
   Widget _buildNotaCard(Map t) {
     Color badgeColor = t['metode'] == 'BB' ? Colors.red.shade600 : Colors.teal.shade700;
 
@@ -638,6 +866,30 @@ class _LaporanScreenState extends State<LaporanScreen> {
       }
     }
 
+    // Group rows per nota (id) supaya 1 nota = 1 card meskipun split payment
+    final Map<int, Map<String, dynamic>> _groupedMap = {};
+    for (var t in transaksiNota) {
+      final int notaId = (t['id'] is int) ? t['id'] : int.tryParse(t['id'].toString()) ?? -1;
+      if (!_groupedMap.containsKey(notaId)) {
+        _groupedMap[notaId] = {
+          'id': notaId,
+          'nama_pelanggan': t['nama_pelanggan'],
+          'jam': t['jam'],
+          'berat_kg': t['berat_kg'],
+          'harga_per_kg': t['harga_per_kg'],
+          'status_bayar': t['status_bayar'],
+          'total_nota_full': t['total_nota_full'] ?? t['total_bersih'],
+          'payments': <Map>[],
+        };
+      }
+      _groupedMap[notaId]!['payments'].add({
+        'metode': t['metode'],
+        'nominal': t['total_bersih'],
+        'pembayaran_id': t['pembayaran_id'],
+      });
+    }
+    final List<Map<String, dynamic>> groupedNotas = _groupedMap.values.toList();
+
     bool isDataKosong = transaksiKasMasuk.isEmpty && transaksiNota.isEmpty && transaksiPengeluaran.isEmpty && transaksiKasKeluarLain.isEmpty && transaksiPelunasan.isEmpty;
     
     return Scaffold(
@@ -711,9 +963,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
                               ...transaksiKasMasuk.map((k) => _buildTransactionCard(title: k['keterangan'], subtitle: 'Kas Masuk', amountText: "+ ${formatRp(k['nominal'])}", color: Colors.green.shade600, onTap: () => _tampilkanDialogEditUmum('Kas Masuk', k['id'], k['keterangan'], double.parse(k['nominal'].toString())))),
                             ],
                             
-                            if (transaksiNota.isNotEmpty) ...[
+                            if (groupedNotas.isNotEmpty) ...[
                               _buildSectionHeader('PEMBELIAN NOTA', Colors.teal.shade600, Icons.receipt_rounded),
-                              ...transaksiNota.map((t) => _buildNotaCard(t)),
+                              ...groupedNotas.map((g) => _buildNotaCardGrouped(g)),
                             ],
 
                             // --- TAMPILAN BARU: PELUNASAN HUTANG ---
