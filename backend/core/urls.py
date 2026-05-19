@@ -1,8 +1,9 @@
 from django.contrib import admin
 from django.urls import path
 from operasional.views import (
-    list_pelanggan, 
-    tambah_pelanggan, 
+    list_pelanggan,
+    tambah_pelanggan,
+    hapus_pelanggan,
     buat_nota, 
     laporan_harian,
     info_kas, 
@@ -40,6 +41,7 @@ urlpatterns = [
     
     path('api/pelanggan/', list_pelanggan, name='list_pelanggan'),
     path('api/pelanggan/tambah/', tambah_pelanggan, name='tambah_pelanggan'),
+    path('api/pelanggan/hapus/', hapus_pelanggan, name='hapus_pelanggan'),
     path('api/pelanggan/belum_nota/<int:p_id>/', item_belum_nota, name='item_belum_nota'),
     path('api/nota/buat/', buat_nota, name='buat_nota'),
     

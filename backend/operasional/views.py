@@ -103,6 +103,56 @@ def tambah_pelanggan(request):
         return JsonResponse({'status': 'sukses', 'pesan': 'Petani ditambahkan'})
 
 @csrf_exempt
+def hapus_pelanggan(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        p_id = data.get('pelanggan_id')
+        force = bool(data.get('force', False))
+
+        pelanggan = Pelanggan.objects.get(id=p_id)
+
+        # Safety check: jangan biarin hapus yang masih punya nota / kasbon / item aktif
+        # kecuali user pilih force=true
+        ada_nota = Nota.objects.filter(pelanggan=pelanggan).exists()
+        ada_item_aktif = ItemPengiriman.objects.filter(pelanggan=pelanggan, is_dibuat_nota=False).exists()
+        ada_kasbon = pelanggan.total_kasbon and Decimal(str(pelanggan.total_kasbon)) > 0
+
+        warnings = []
+        if ada_nota:
+            warnings.append('punya riwayat nota')
+        if ada_item_aktif:
+            warnings.append('punya item pengiriman aktif')
+        if ada_kasbon:
+            warnings.append(f'masih ada kasbon Rp {float(pelanggan.total_kasbon):,.0f}')
+
+        if warnings and not force:
+            return JsonResponse({
+                'status': 'butuh_konfirmasi',
+                'pesan': f"Petani {pelanggan.nama} {', '.join(warnings)}.",
+                'warnings': warnings,
+            }, status=409)
+
+        username = data.get('username')
+        editor = User.objects.filter(username=username).first() if username else None
+
+        nama_lama = pelanggan.nama
+        pelanggan.delete()
+
+        if editor:
+            LogAktivitas.objects.create(
+                user=editor, modul='Pelanggan', aksi='HAPUS',
+                keterangan=f"Hapus petani [{nama_lama}]" + (f" (force, warnings: {', '.join(warnings)})" if warnings else "")
+            )
+
+        return JsonResponse({'status': 'sukses', 'pesan': f"Petani {nama_lama} dihapus."})
+    except Pelanggan.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Petani tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+@csrf_exempt
 def buat_nota(request):
     if request.method == 'POST':
         try:
