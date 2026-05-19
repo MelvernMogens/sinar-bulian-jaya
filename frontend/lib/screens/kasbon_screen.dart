@@ -32,26 +32,97 @@ class _MenuKasbonScreenState extends State<MenuKasbonScreen> {
     }
   } 
   
-  void filterList(String query) { 
-    setState(() { 
-      if (query.isEmpty) { 
-        filteredPelanggan = pelanggan; 
-      } else { 
-        filteredPelanggan = pelanggan.where((p) => p['nama'].toString().toLowerCase().contains(query.toLowerCase())).toList(); 
-      } 
-    }); 
+  void filterList(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        filteredPelanggan = pelanggan;
+      } else {
+        filteredPelanggan = pelanggan.where((p) => p['nama'].toString().toLowerCase().contains(query.toLowerCase())).toList();
+      }
+    });
   }
-  
-  @override 
-  void initState() { 
-    super.initState(); 
-    fetchPelanggan(); 
-  } 
+
+  void _dialogTambahPelangganBaru() {
+    final namaCtrl = TextEditingController();
+    showDialog(context: context, builder: (context) => AlertDialog(
+      backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: const Text('Tambah Petani Baru', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+      content: Container(
+        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+        child: TextField(
+          controller: namaCtrl,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            hintText: 'Nama lengkap petani',
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.normal),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+      ),
+      actionsPadding: const EdgeInsets.only(bottom: 16, right: 16, left: 16),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal.shade700,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onPressed: () async {
+            final nama = namaCtrl.text.trim();
+            if (nama.isEmpty) {
+              showCustomSnackbar(context, 'Nama tidak boleh kosong!', isError: true);
+              return;
+            }
+            try {
+              final res = await http.post(
+                Uri.parse('${AppConfig.baseUrl}/api/pelanggan/tambah/'),
+                headers: {'Content-Type': 'application/json'},
+                body: json.encode({'nama': nama}),
+              );
+              if (!mounted) return;
+              if (res.statusCode == 200) {
+                Navigator.pop(context);
+                showCustomSnackbar(context, 'Petani $nama berhasil ditambah!');
+                fetchPelanggan();
+              } else {
+                showCustomSnackbar(context, 'Gagal menambah petani!', isError: true);
+              }
+            } catch (e) {
+              if (mounted) showCustomSnackbar(context, 'Koneksi ke server gagal!', isError: true);
+            }
+          },
+          child: const Text('Simpan', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ],
+    ));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    fetchPelanggan();
+  }
   
   @override 
   Widget build(BuildContext context) { 
     return Scaffold(
       backgroundColor: Colors.white,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _dialogTambahPelangganBaru,
+        backgroundColor: Colors.teal.shade700,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+        label: const Text('Tambah Petani', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
       body: Stack(
         children: [
           Positioned(

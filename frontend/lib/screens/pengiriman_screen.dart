@@ -71,7 +71,7 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade50, foregroundColor: Colors.teal.shade800, elevation: 0, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                onPressed: () { Navigator.pop(context); buatPengiriman('STOCK', ''); }, 
+                onPressed: () { Navigator.pop(context); _pilihLotDanBuat('STOCK', ''); },
                 child: const Text('Timbang Taruh', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))
               ),
             ),
@@ -79,7 +79,7 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700, foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                onPressed: () { Navigator.pop(context); dialogPlatMobil(); }, 
+                onPressed: () { Navigator.pop(context); dialogPlatMobil(); },
                 child: const Text('Kirim (Mobil)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))
               ),
             ),
@@ -100,19 +100,136 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
         TextButton(onPressed: ()=>Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-          onPressed: () { if(platCtrl.text.isNotEmpty) { Navigator.pop(context); buatPengiriman('KIRIM', platCtrl.text); } }, 
-          child: const Text('Simpan', style: TextStyle(fontWeight: FontWeight.bold))
+          onPressed: () { if(platCtrl.text.isNotEmpty) { Navigator.pop(context); _pilihLotDanBuat('KIRIM', platCtrl.text); } },
+          child: const Text('Lanjut', style: TextStyle(fontWeight: FontWeight.bold))
         )
       ],
     ));
   }
 
-  Future<void> buatPengiriman(String tipe, String plat) async {
+  // STEP 2: fetch lot aktif & tampilkan picker → trigger create
+  Future<void> _pilihLotDanBuat(String tipe, String plat) async {
+    List lots = [];
     try {
+      final res = await http.get(Uri.parse('${AppConfig.baseUrl}/api/lot/'));
+      if (res.statusCode == 200) {
+        final all = json.decode(res.body) as List;
+        lots = all.where((l) => l['is_selesai'] != true).toList();
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    String? selectedLotId;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(ctx).padding.bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)), margin: const EdgeInsets.only(bottom: 16, left: 130)),
+                const Text('Pilih Lot Pabrik', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 4),
+                Text('Wadah ini akan dimasukkan ke lot pabrik berikut.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                const SizedBox(height: 16),
+
+                // "Tanpa Lot" option
+                _buildLotOption(
+                  context: ctx,
+                  label: 'Tanpa Lot (Pilih nanti)',
+                  subtitle: 'Wadah dibuat dulu, lot di-set kemudian',
+                  isSelected: selectedLotId == null,
+                  onTap: () => setSheet(() => selectedLotId = null),
+                  color: Colors.grey.shade700,
+                ),
+                if (lots.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: Text('Belum ada lot aktif. Buat lot di menu Lot Pabrik.', style: TextStyle(color: Colors.grey.shade500, fontSize: 12), textAlign: TextAlign.center)),
+                  ),
+                ...lots.map((l) => _buildLotOption(
+                  context: ctx,
+                  label: l['nama_lot'] ?? '-',
+                  subtitle: 'Pabrik: ${l['pabrik'] ?? '-'}',
+                  isSelected: selectedLotId == l['id'].toString(),
+                  onTap: () => setSheet(() => selectedLotId = l['id'].toString()),
+                  color: Colors.teal.shade700,
+                )),
+
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: tipe == 'KIRIM' ? Colors.amber.shade700 : Colors.teal.shade700,
+                      foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: Text('Buat Wadah ${tipe == 'KIRIM' ? 'Kirim' : 'Stock'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    onPressed: () { Navigator.pop(ctx); buatPengiriman(tipe, plat, selectedLotId); },
+                  ),
+                )
+              ],
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  Widget _buildLotOption({required BuildContext context, required String label, required String subtitle, required bool isSelected, required VoidCallback onTap, required Color color}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isSelected ? color.withOpacity(0.08) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isSelected ? color : Colors.grey.shade200, width: isSelected ? 1.5 : 1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded, color: isSelected ? color : Colors.grey.shade400, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSelected ? color : Colors.black87)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> buatPengiriman(String tipe, String plat, [String? lotId]) async {
+    try {
+      final body = <String, dynamic>{'tipe': tipe, 'plat_mobil': plat};
+      if (lotId != null) body['lot_id'] = lotId;
       final res = await http.post(
-        Uri.parse('${AppConfig.baseUrl}/api/pengiriman/buat/'), 
+        Uri.parse('${AppConfig.baseUrl}/api/pengiriman/buat/'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'tipe': tipe, 'plat_mobil': plat})
+        body: json.encode(body),
       );
       if (res.statusCode == 200) {
         if (!mounted) return;
