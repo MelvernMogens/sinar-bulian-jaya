@@ -1,0 +1,79 @@
+# ============================================
+# Sinar Bulian Jaya — Root .gitignore
+# ============================================
+
+# --- Python / Django ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+venv/
+env/
+.env
+*.sqlite3
+db.sqlite3
+
+# --- Secrets (NEVER push these) ---
+firebase-admin.json
+*.key
+*.pem
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# --- Flutter / Dart ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+flutter_*.png
+
+# --- iOS / macOS ---
+ios/Pods/
+ios/.symlinks/
+ios/Runner.xcworkspace/xcuserdata/
+macos/Pods/
+macos/.symlinks/
+macos/Runner.xcworkspace/xcuserdata/
+*.xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcuserstate
+project.xcworkspace/
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
+xcuserdata/
+
+# --- Android ---
+.gradle/
+*.iml
+local.properties
+.idea/
+*.jks
+*.keystore
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Flutter lock files (auto-generated) ---
+pubspec.lock
+frontend/pubspec.lock
