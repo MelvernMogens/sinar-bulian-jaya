@@ -388,25 +388,34 @@ def laporan_harian(request):
     data_nota = []
     
     for n in notas:
-        # Ambil pembayaran original (exclude pelunasan yang dilakukan di hari lain)
-        pembs = list(
-            Pembayaran.objects.filter(nota=n)
-            .exclude(keterangan__in=['Pelunasan BB', 'Pelunasan TF'])
-            .order_by('id')
-        )
-        total_paid = sum([Decimal(str(p.nominal)) for p in pembs])
+        # Ambil SEMUA Pembayaran (termasuk yang sudah dilunasi) supaya komposisi asli
+        # nota tetap terlihat di laporan harian meskipun sudah lunas/selesai TF.
+        all_pembs = list(Pembayaran.objects.filter(nota=n).order_by('id'))
         total_bersih_nota = Decimal(str(n.total_bersih))
         jam_lokal = timezone.localtime(n.tanggal).strftime('%H:%M') if n.tanggal else '-'
 
-        # Build rows: 1 row per Pembayaran + 1 row BB kalau ada porsi belum bayar
         rows = []
-        for p in pembs:
-            rows.append({'metode': p.metode, 'nominal': Decimal(str(p.nominal)), 'pembayaran_id': p.id})
-        if n.status_bayar == 'BB':
-            bb_portion = total_bersih_nota - total_paid
-            if bb_portion > 0:
-                rows.append({'metode': 'BB', 'nominal': bb_portion, 'pembayaran_id': None})
-        # Edge case: gak ada Pembayaran sama sekali & status LUNAS (legacy)
+        total_explicit = Decimal('0')   # total nominal yang sudah ada Pembayaran-nya (apapun)
+        for p in all_pembs:
+            nominal_p = Decimal(str(p.nominal))
+            total_explicit += nominal_p
+            if p.keterangan == 'Pelunasan BB':
+                # Pembayaran ini awalnya BB (sekarang sudah dilunasi).
+                # Tampilkan tetap sebagai BB di komposisi asli laporan harian.
+                rows.append({'metode': 'BB', 'nominal': nominal_p, 'pembayaran_id': p.id})
+            else:
+                # Pembayaran original (CASH/TRANSFER/AMPERA/BB literal),
+                # atau Pelunasan TF (metode tetap TRANSFER).
+                rows.append({'metode': p.metode, 'nominal': nominal_p, 'pembayaran_id': p.id})
+
+        # Implied BB: porsi yang tidak ada Pembayaran-nya sama sekali (mis. nota
+        # pure BB yang belum pernah dibuatkan record Pembayaran, atau split di
+        # mana BB-nya gak punya row Pembayaran).
+        implied_bb = total_bersih_nota - total_explicit
+        if implied_bb > 0:
+            rows.append({'metode': 'BB', 'nominal': implied_bb, 'pembayaran_id': None})
+
+        # Edge case fallback: tidak ada satu pun row (data corrupt) → CASH full
         if len(rows) == 0:
             rows.append({'metode': 'CASH', 'nominal': total_bersih_nota, 'pembayaran_id': None})
 
