@@ -205,9 +205,10 @@ def buat_nota(request):
                         status_nota = 'BB'
 
                     nota = Nota.objects.create(
-                        pelanggan=pelanggan, berat_kg=b, harga_per_kg=h, 
+                        pelanggan=pelanggan, berat_kg=b, harga_per_kg=h,
                         status_bayar=status_nota,
-                        pakai_komisi=pakai_komisi, pakai_buruh=pakai_buruh, pakai_materai=(pakai_materai and idx == 0)
+                        pakai_komisi=pakai_komisi, pakai_buruh=pakai_buruh, pakai_materai=(pakai_materai and idx == 0),
+                        item_pengiriman=item,
                     )
                     
                     
@@ -522,10 +523,19 @@ def edit_transaksi(request):
                     
                     pembayaran = Pembayaran.objects.filter(nota=nota).first()
                     kas = KasGudang.objects.filter(keterangan__startswith=f'Pembayaran Nota #{nota.id}').first()
-                    
+
                     nota.save()
                     if kas: kas.nominal = total_bersih_baru; kas.save()
                     if pembayaran: pembayaran.nominal = total_bersih_baru; pembayaran.save()
+
+                    # Sync ItemPengiriman terkait (kalau ada FK link) supaya laporan pengiriman ikut update
+                    if nota.item_pengiriman_id:
+                        item = nota.item_pengiriman
+                        item.tonase = nota.berat_kg
+                        item.harga_input = nota.harga_per_kg
+                        item.harga_jual = nota.harga_per_kg + Decimal('200')
+                        item.total_harga = item.tonase * item.harga_jual
+                        item.save()
                 
                 if keterangan_log:
                     LogAktivitas.objects.create(user=editor, modul=tipe, aksi='EDIT', keterangan=keterangan_log)
@@ -545,13 +555,30 @@ def list_pengiriman_aktif(request):
 @csrf_exempt
 def buat_pengiriman(request):
     if request.method == 'POST':
-        tipe = json.loads(request.body).get('tipe')
+        data = json.loads(request.body)
+        tipe = data.get('tipe')
+        lot_id = data.get('lot_id')
+        lot_obj = None
+        if lot_id:
+            try:
+                lot_obj = LotPabrik.objects.get(id=lot_id, is_selesai=False)
+            except LotPabrik.DoesNotExist:
+                return JsonResponse({'status': 'gagal', 'pesan': 'Lot tidak ditemukan atau sudah selesai.'}, status=400)
+
         if tipe == 'KIRIM':
-            Pengiriman.objects.create(tipe='KIRIM', plat_mobil=json.loads(request.body).get('plat_mobil').upper())
+            Pengiriman.objects.create(
+                tipe='KIRIM',
+                plat_mobil=data.get('plat_mobil', '').upper(),
+                lot=lot_obj,
+            )
         else:
             total_stock_sebelumnya = Pengiriman.objects.filter(tipe='STOCK').count()
             urutan = (total_stock_sebelumnya % 50) + 1
-            Pengiriman.objects.create(tipe='STOCK', nama_stock=f"Stock {urutan:02d}")
+            Pengiriman.objects.create(
+                tipe='STOCK',
+                nama_stock=f"Stock {urutan:02d}",
+                lot=lot_obj,
+            )
         return JsonResponse({'status': 'sukses'})
 
 @csrf_exempt

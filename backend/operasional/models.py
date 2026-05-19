@@ -15,18 +15,24 @@ class Pelanggan(models.Model):
 
 class Nota(models.Model):
     STATUS_PILIHAN = [('LUNAS', 'Lunas'), ('BB', 'Belum Bayar (BB)')]
-    
+
     pelanggan = models.ForeignKey(Pelanggan, on_delete=models.CASCADE)
     tanggal = models.DateTimeField(default=timezone.now)
     berat_kg = models.DecimalField(max_digits=10, decimal_places=2)
     harga_per_kg = models.DecimalField(max_digits=10, decimal_places=2)
     biaya_materai = models.DecimalField(max_digits=10, decimal_places=2, default=6000)
-    
+
     pakai_komisi = models.BooleanField(default=True)
     pakai_buruh = models.BooleanField(default=True)
     pakai_materai = models.BooleanField(default=True)
-    
+
     status_bayar = models.CharField(max_length=10, choices=STATUS_PILIHAN, default='LUNAS')
+
+    # Link ke ItemPengiriman supaya edit nota bisa sync ke laporan pengiriman
+    item_pengiriman = models.ForeignKey(
+        'ItemPengiriman', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='nota_set'
+    )
     
     @property
     def total_kotor(self):
