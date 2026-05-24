@@ -48,6 +48,17 @@ def round_up_ribuan(val):
 def round_down_ribuan(val):
     return Decimal(str(math.floor(float(val) / 1000.0) * 1000))
 
+def hitung_margin_pabrik(pakai_komisi, pakai_buruh, pakai_materai):
+    """
+    Margin pabrik (harga_jual = harga_input + margin):
+    - 500 kalau SEMUA potongan off (komisi/buruh/materai semua False)
+      → kompensasi karena SBJ gak ambil potongan
+    - 200 default kalau ada salah satu potongan aktif
+    """
+    if not pakai_komisi and not pakai_buruh and not pakai_materai:
+        return Decimal('500')
+    return Decimal('200')
+
 
 @csrf_exempt
 def api_login(request):
@@ -276,7 +287,14 @@ def buat_nota(request):
 
                     if first_nota_id is None:
                         first_nota_id = nota.id
-                    
+
+                    # Recompute margin pabrik & harga_jual item berdasarkan nota
+                    # (margin 500 kalau semua potongan off, 200 default)
+                    margin = hitung_margin_pabrik(
+                        nota.pakai_komisi, nota.pakai_buruh, nota.pakai_materai
+                    )
+                    item.harga_jual = item.harga_input + margin
+                    item.total_harga = item.tonase * item.harga_jual
                     item.is_dibuat_nota = True
                     item.save()
 
@@ -616,7 +634,11 @@ def edit_transaksi(request):
                         item = nota.item_pengiriman
                         item.tonase = nota.berat_kg
                         item.harga_input = nota.harga_per_kg
-                        item.harga_jual = nota.harga_per_kg + Decimal('200')
+                        # Margin pabrik: 500 kalau semua potongan off, 200 default
+                        margin = hitung_margin_pabrik(
+                            nota.pakai_komisi, nota.pakai_buruh, nota.pakai_materai
+                        )
+                        item.harga_jual = nota.harga_per_kg + margin
                         item.total_harga = item.tonase * item.harga_jual
                         item.save()
                 
