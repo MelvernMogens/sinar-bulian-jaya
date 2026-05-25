@@ -109,9 +109,24 @@ def list_pelanggan(request):
 
 @csrf_exempt
 def tambah_pelanggan(request):
-    if request.method == 'POST':
-        Pelanggan.objects.create(nama=json.loads(request.body).get('nama'))
-        return JsonResponse({'status': 'sukses', 'pesan': 'Petani ditambahkan'})
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        nama = (data.get('nama') or '').strip()
+        if not nama:
+            return JsonResponse({'status': 'gagal', 'pesan': 'Nama petani wajib diisi.'}, status=400)
+        if len(nama) > 100:
+            return JsonResponse({'status': 'gagal', 'pesan': 'Nama terlalu panjang (max 100 karakter).'}, status=400)
+        # Cek duplikasi nama (case-insensitive)
+        if Pelanggan.objects.filter(nama__iexact=nama).exists():
+            return JsonResponse({'status': 'gagal', 'pesan': f'Petani "{nama}" sudah terdaftar.'}, status=400)
+        Pelanggan.objects.create(nama=nama)
+        return JsonResponse({'status': 'sukses', 'pesan': f'Petani {nama} ditambahkan.'})
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Format request tidak valid.'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
 
 @csrf_exempt
 def hapus_pelanggan(request):
@@ -183,6 +198,18 @@ def buat_nota(request):
 
             if not items_db.exists():
                 return JsonResponse({'status': 'gagal', 'pesan': 'Tidak ada barang yang dipilih!'}, status=400)
+
+            # VALIDASI: setoran_pinjaman tidak boleh melebihi kasbon petani saat ini
+            if setoran_pinjaman > 0:
+                try:
+                    _pel_check = Pelanggan.objects.get(id=pelanggan_id)
+                    if setoran_pinjaman > Decimal(str(_pel_check.total_kasbon)):
+                        return JsonResponse({
+                            'status': 'gagal',
+                            'pesan': f'Setoran kasbon (Rp {setoran_pinjaman:,.0f}) melebihi kasbon petani (Rp {float(_pel_check.total_kasbon):,.0f}).'
+                        }, status=400)
+                except Pelanggan.DoesNotExist:
+                    return JsonResponse({'status': 'gagal', 'pesan': 'Petani tidak ditemukan.'}, status=404)
 
             pakai_komisi = data.get('pakai_komisi', True)
             pakai_buruh = data.get('pakai_buruh', True)
@@ -325,21 +352,23 @@ def buat_nota(request):
                             tanggal_bayar=parse_date(tanggal_tf) if (metode_bayar == 'TF' and tanggal_tf) else timezone.now().date(),
                             keterangan='Pelunasan' if not is_split else f'Split 1 ({metode_bayar})', 
                             is_setoran_pinjaman=True if potong_per_item[idx] > 0 else False,
-                            is_selesai=False if metode_bayar == 'TF' else True
+                            # BB & TF belum lunas (BB = utang, TF = nunggu masuk rekening)
+                            is_selesai=False if metode_bayar in ('TF', 'BB') else True
                         )
 
                     if is_split and bayar_2_nota > 0:
                         if metode_2 == 'CASH':
                             KasGudang.objects.create(tipe_mutasi='KELUAR', nominal=bayar_2_nota, keterangan=f'Pembayaran Nota #{nota.id} - {pelanggan.nama} (Split)')
-                        
+
                         Pembayaran.objects.create(
-                            nota=nota, 
-                            metode='TRANSFER' if metode_2 == 'TF' else metode_2, 
+                            nota=nota,
+                            metode='TRANSFER' if metode_2 == 'TF' else metode_2,
                             nominal=bayar_2_nota,
                             tanggal_bayar=parse_date(tanggal_tf) if (metode_2 == 'TF' and tanggal_tf) else timezone.now().date(),
-                            keterangan=f'Split 2 ({metode_2})', 
+                            keterangan=f'Split 2 ({metode_2})',
                             is_setoran_pinjaman=False,
-                            is_selesai=False if metode_2 == 'TF' else True
+                            # BB & TF belum lunas
+                            is_selesai=False if metode_2 in ('TF', 'BB') else True
                         )
 
             return JsonResponse({'status': 'sukses', 'id_nota': first_nota_id})
@@ -375,6 +404,12 @@ def transaksi_kasbon(request):
                     pelanggan.total_kasbon += nominal
                     KasGudang.objects.create(tipe_mutasi='KELUAR', nominal=nominal, keterangan=f'Kasbon Keluar: {pelanggan.nama}')
                 elif tipe == 'SETOR':
+                    # VALIDASI: jangan biarin setoran > kasbon (saldo kasbon minus)
+                    if nominal > Decimal(str(pelanggan.total_kasbon)):
+                        return JsonResponse({
+                            'status': 'gagal',
+                            'pesan': f'Setoran (Rp {nominal:,.0f}) melebihi kasbon petani (Rp {float(pelanggan.total_kasbon):,.0f}).'
+                        }, status=400)
                     pelanggan.total_kasbon -= nominal
                     KasGudang.objects.create(tipe_mutasi='MASUK', nominal=nominal, keterangan=f'Setoran Kasbon: {pelanggan.nama}')
                 pelanggan.save()
@@ -404,30 +439,41 @@ def list_tanggungan(request):
 def lunasin_bb(request):
     if request.method == 'POST':
         data = json.loads(request.body)
-        nota = Nota.objects.get(id=data.get('nota_id'))
+        try:
+            nota = Nota.objects.get(id=data.get('nota_id'))
+        except Nota.DoesNotExist:
+            return JsonResponse({'status': 'gagal', 'pesan': 'Nota tidak ditemukan.'}, status=404)
+
+        # IDEMPOTENT: kalau sudah LUNAS, abort tanpa side effect
+        if nota.status_bayar == 'LUNAS':
+            return JsonResponse({'status': 'sukses', 'pesan': 'Nota sudah lunas.', 'already_done': True})
+
         metode = data.get('metode', 'CASH')
-        
+
         pemb_bb = Pembayaran.objects.filter(nota=nota, metode='BB').first()
         tagihan_akhir = pemb_bb.nominal if pemb_bb else nota.total_bersih
-        
+
         with transaction.atomic():
             nota.status_bayar = 'LUNAS'
             nota.save()
-            
+
             if pemb_bb:
                 pemb_bb.metode = 'TRANSFER' if metode == 'TF' else 'CASH'
                 pemb_bb.is_selesai = True if metode == 'CASH' else False
                 pemb_bb.keterangan = 'Pelunasan BB'
+                # JANGAN overwrite tanggal_bayar original. Pakai tanggal pelunasan saja
+                # di metadata baru kalau perlu di future. Simpan tanggal pelunasan ke now()
+                # tapi keep histori di nota.tanggal sebagai source of truth.
                 pemb_bb.tanggal_bayar = timezone.now().date()
                 pemb_bb.save()
-            
+
             if metode == 'CASH':
                 KasGudang.objects.create(
-                    tipe_mutasi='KELUAR', 
-                    nominal=tagihan_akhir, 
+                    tipe_mutasi='KELUAR',
+                    nominal=tagihan_akhir,
                     keterangan=f'Pelunasan BB Nota #{nota.id} - {nota.pelanggan.nama}'
                 )
-                
+
         return JsonResponse({'status': 'sukses'})
 
 @csrf_exempt
@@ -436,14 +482,20 @@ def selesaikan_tf(request):
         data = json.loads(request.body)
         try:
             p = Pembayaran.objects.get(id=data.get('pembayaran_id'))
-            with transaction.atomic():
-                p.is_selesai = True
-                p.keterangan = 'Pelunasan TF'
-                p.tanggal_bayar = timezone.now().date()
-                p.save()
-            return JsonResponse({'status': 'sukses'})
         except Pembayaran.DoesNotExist:
             return JsonResponse({'status': 'gagal', 'pesan': 'Data pembayaran tidak ditemukan'}, status=404)
+
+        # IDEMPOTENT: kalau TF sudah selesai, abort tanpa side effect
+        if p.is_selesai:
+            return JsonResponse({'status': 'sukses', 'pesan': 'TF sudah selesai.', 'already_done': True})
+
+        with transaction.atomic():
+            p.is_selesai = True
+            p.keterangan = 'Pelunasan TF'
+            # Keep tanggal_bayar original (kapan TF masuk) — TIDAK overwrite
+            # Status selesai pakai is_selesai flag saja
+            p.save()
+        return JsonResponse({'status': 'sukses'})
 
 def info_tonase(request):
     tonase = Nota.objects.filter(tanggal__date=timezone.now().date()).aggregate(Sum('berat_kg'))['berat_kg__sum'] or Decimal('0')
@@ -623,21 +675,32 @@ def edit_transaksi(request):
                         
                 elif tipe == 'Nota':
                     nota = Nota.objects.get(id=obj_id)
+
+                    # GUARD: nota dengan setoran kasbon tidak bisa diedit langsung
+                    # karena distribusi setoran complex (sudah masuk BukuKasbon SETOR).
+                    # Edit-nya bisa bikin total_kasbon pelanggan jadi salah.
+                    has_setoran = Pembayaran.objects.filter(nota=nota, is_setoran_pinjaman=True).exists()
+                    if has_setoran:
+                        return JsonResponse({
+                            'status': 'gagal',
+                            'pesan': 'Nota ini memakai setoran kasbon. Edit langsung tidak didukung — silakan hapus & buat ulang.'
+                        }, status=400)
+
                     old_berat = nota.berat_kg
                     old_harga = nota.harga_per_kg
-                    
+
                     nota.berat_kg = Decimal(str(data.get('berat_kg', nota.berat_kg)))
                     nota.harga_per_kg = Decimal(str(data.get('harga_per_kg', nota.harga_per_kg)))
-                    
+
                     if old_berat != nota.berat_kg or old_harga != nota.harga_per_kg:
                         keterangan_log = f"Ubah Nota #{nota.id} ({nota.pelanggan.nama}) - Berat: {old_berat}->{nota.berat_kg}, Harga: {old_harga}->{nota.harga_per_kg}"
-                    
+
                     kotor = nota.berat_kg * nota.harga_per_kg
                     komisi = round_up_ribuan(kotor * Decimal('0.01')) if nota.pakai_komisi else Decimal('0')
                     buruh = round_up_ribuan(nota.berat_kg * Decimal('35')) if nota.pakai_buruh else Decimal('0')
                     materai = Decimal('6000') if nota.pakai_materai else Decimal('0')
                     total_bersih_baru = round_down_ribuan(kotor - komisi - buruh - materai)
-                    
+
                     nota.save()
 
                     # ------ DISTRIBUSI ULANG PEMBAYARAN (handle split) ------
@@ -785,10 +848,24 @@ def edit_item_pengiriman(request):
 
 @csrf_exempt
 def hapus_item_pengiriman(request):
-    if request.method == 'POST':
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
         data = json.loads(request.body)
-        ItemPengiriman.objects.filter(id=data['item_id']).delete()
+        item = ItemPengiriman.objects.get(id=data['item_id'])
+        # GUARD: jangan biarin hapus item yang sudah jadi nota — bakal merusak
+        # konsistensi laporan dan nota yang sudah dicetak/dibayar.
+        if item.is_dibuat_nota:
+            return JsonResponse({
+                'status': 'gagal',
+                'pesan': 'Item ini sudah dibuat nota — tidak bisa dihapus. Hapus nota-nya dulu.'
+            }, status=400)
+        item.delete()
         return JsonResponse({'status': 'sukses'})
+    except ItemPengiriman.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Item tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
 
 @csrf_exempt
 def finalisasi_pengiriman(request):
