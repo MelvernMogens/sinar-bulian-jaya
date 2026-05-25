@@ -19,6 +19,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
   List transaksiKasKeluarLain = []; 
   List transaksiPengeluaran = []; 
   List transaksiPelunasan = []; // <--- TAMBAHAN LIST BARU
+  List transaksiSetoranKasbon = []; // setoran kasbon yang dipotong via nota hari ini
   bool isLoading = false; 
   double totalKasMasukLaporan = 0; 
   double totalKasKeluarLaporan = 0; 
@@ -41,6 +42,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
           transaksiKasKeluarLain = data['kas_keluar_lain'] ?? []; 
           transaksiPengeluaran = data['pengeluaran'] ?? []; 
           transaksiPelunasan = data['pelunasan_hutang'] ?? []; // <--- TARIK DATA PELUNASAN
+          transaksiSetoranKasbon = data['setoran_kasbon_via_nota'] ?? [];
           
           if(data['summary'] != null) {
             totalKasMasukLaporan = double.tryParse(data['summary']['total_kas_masuk'].toString()) ?? 0; 
@@ -1043,7 +1045,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
     }
     final List<Map<String, dynamic>> groupedNotas = _groupedMap.values.toList();
 
-    bool isDataKosong = transaksiKasMasuk.isEmpty && transaksiNota.isEmpty && transaksiPengeluaran.isEmpty && transaksiKasKeluarLain.isEmpty && transaksiPelunasan.isEmpty;
+    bool isDataKosong = transaksiKasMasuk.isEmpty && transaksiNota.isEmpty && transaksiPengeluaran.isEmpty && transaksiKasKeluarLain.isEmpty && transaksiPelunasan.isEmpty && transaksiSetoranKasbon.isEmpty;
     
     return Scaffold(
       backgroundColor: Colors.white,
@@ -1125,13 +1127,27 @@ class _LaporanScreenState extends State<LaporanScreen> {
                             if (transaksiPelunasan.isNotEmpty) ...[
                               _buildSectionHeader('PELUNASAN HUTANG (BB & TRANSFER)', Colors.blue.shade700, Icons.verified_rounded),
                               ...transaksiPelunasan.map((p) => _buildTransactionCard(
-                                title: 'Pelunasan Nota #${p['id_nota']} - ${p['nama_pelanggan']}', 
-                                subtitle: p['keterangan'] == 'Pelunasan BB' ? 'Dibayar via ${p['metode']}' : 'Status: Selesai di-Transfer', 
-                                amountText: "- ${formatRp(p['nominal'])}", 
-                                color: Colors.blue.shade700, 
-                                isMinus: true, 
-                                showEditIcon: false, // Pelunasan gak boleh diedit manual dari layar ini
+                                title: 'Pelunasan Nota #${p['id_nota']} - ${p['nama_pelanggan']}',
+                                subtitle: p['keterangan'] == 'Pelunasan BB' ? 'Dibayar via ${p['metode']}' : 'Status: Selesai di-Transfer',
+                                amountText: "- ${formatRp(p['nominal'])}",
+                                color: Colors.blue.shade700,
+                                isMinus: true,
+                                showEditIcon: false,
                                 onTap: () => showCustomSnackbar(context, 'Riwayat pelunasan tidak dapat diedit langsung.')
+                              )),
+                            ],
+
+                            // --- SETORAN KASBON VIA NOTA (utang dibayar via potong nota) ---
+                            if (transaksiSetoranKasbon.isNotEmpty) ...[
+                              _buildSectionHeader('SETORAN KASBON (via Nota)', Colors.indigo.shade700, Icons.savings_rounded),
+                              ...transaksiSetoranKasbon.map((s) => _buildTransactionCard(
+                                title: 'Potong Kasbon — ${s['nama_pelanggan']}',
+                                subtitle: 'Utang petani berkurang via potong nota',
+                                amountText: "- ${formatRp(s['nominal'])}",
+                                color: Colors.indigo.shade700,
+                                isMinus: true,
+                                showEditIcon: false,
+                                onTap: () => showCustomSnackbar(context, 'Setoran kasbon via nota — lihat detail di Buku Kasbon petani.'),
                               )),
                             ],
                             

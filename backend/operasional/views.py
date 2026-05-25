@@ -386,6 +386,55 @@ def tambah_saldo(request):
         KasGudang.objects.create(tipe_mutasi='MASUK', nominal=Decimal(json.loads(request.body).get('nominal', 0)), keterangan='AMPERA' if json.loads(request.body).get('is_ampera', False) else 'Tambahan Saldo Harian')
         return JsonResponse({'status': 'sukses'})
 
+def history_kasbon_pelanggan(request, pelanggan_id):
+    """Detail history kasbon per petani — semua PINJAM & SETOR + running balance."""
+    try:
+        pelanggan = Pelanggan.objects.get(id=pelanggan_id)
+    except Pelanggan.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Petani tidak ditemukan.'}, status=404)
+
+    entries = BukuKasbon.objects.filter(pelanggan=pelanggan).order_by('tanggal', 'id')
+    # Hitung running balance
+    history = []
+    running = Decimal('0')
+    for e in entries:
+        if e.tipe_transaksi == 'PINJAM':
+            running += Decimal(str(e.nominal))
+            delta = float(e.nominal)
+        else:  # SETOR
+            running -= Decimal(str(e.nominal))
+            delta = -float(e.nominal)
+        history.append({
+            'id': e.id,
+            'tanggal': e.tanggal.strftime('%Y-%m-%d'),
+            'tipe': e.tipe_transaksi,
+            'nominal': float(e.nominal),
+            'delta': delta,
+            'saldo_setelah': float(running),
+            'keterangan': e.keterangan or '',
+        })
+
+    # Statistik ringkas
+    total_pinjam = sum([Decimal(str(e.nominal)) for e in entries if e.tipe_transaksi == 'PINJAM'])
+    total_setor = sum([Decimal(str(e.nominal)) for e in entries if e.tipe_transaksi == 'SETOR'])
+
+    return JsonResponse({
+        'status': 'sukses',
+        'pelanggan': {
+            'id': pelanggan.id,
+            'nama': pelanggan.nama,
+            'total_kasbon_saat_ini': float(pelanggan.total_kasbon),
+            'saldo_mengendap': float(pelanggan.saldo_mengendap),
+        },
+        'summary': {
+            'total_pinjam': float(total_pinjam),
+            'total_setor': float(total_setor),
+            'jumlah_transaksi': entries.count(),
+        },
+        'history': history,
+    })
+
+
 @csrf_exempt
 def transaksi_kasbon(request):
     if request.method == 'POST':
@@ -624,12 +673,29 @@ def laporan_harian(request):
             'keterangan': p.keterangan
         })
 
+    # Setoran kasbon via nota (potong kasbon saat bikin nota) — tampil sebagai pelunasan
+    # supaya owner liat utang petani yang berkurang via nota hari ini
+    setoran_nota_qs = BukuKasbon.objects.filter(
+        tanggal=tanggal,
+        tipe_transaksi='SETOR',
+        keterangan__icontains='Potong Kasbon via Nota'
+    ).select_related('pelanggan').order_by('-id')
+    data_setoran_nota = []
+    for s in setoran_nota_qs:
+        data_setoran_nota.append({
+            'id_buku_kasbon': s.id,
+            'nama_pelanggan': s.pelanggan.nama,
+            'nominal': float(s.nominal),
+            'keterangan': s.keterangan,
+        })
+
     return JsonResponse({
-        'nota': data_nota, 
+        'nota': data_nota,
         'pengeluaran': [{'id': p.id, 'kategori': p.kategori, 'nominal': float(p.nominal_total), 'keterangan': p.keterangan} for p in pengeluaran],
         'kas_masuk': [{'id': k.id, 'nominal': float(k.nominal), 'keterangan': k.keterangan} for k in kas_masuk],
         'kas_keluar_lain': [{'id': k.id, 'nominal': float(k.nominal), 'keterangan': k.keterangan} for k in kas_keluar_lain],
         'pelunasan_hutang': data_pelunasan,
+        'setoran_kasbon_via_nota': data_setoran_nota,
         'summary': {'total_kas_masuk': float(total_masuk), 'total_kas_keluar': float(total_keluar)}
     }, safe=False)
 

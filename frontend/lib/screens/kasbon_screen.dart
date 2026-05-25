@@ -430,13 +430,43 @@ class FormKasbonScreen extends StatefulWidget {
   @override State<FormKasbonScreen> createState() => _FormKasbonScreenState(); 
 }
 
-class _FormKasbonScreenState extends State<FormKasbonScreen> { 
-  String tipeTransaksi = 'PINJAM'; 
-  final nominalController = TextEditingController(); 
-  final ketController = TextEditingController(); 
-  bool isLoading = false; 
-  
-  Future<void> submitKasbon() async { 
+class _FormKasbonScreenState extends State<FormKasbonScreen> {
+  String tipeTransaksi = 'PINJAM';
+  final nominalController = TextEditingController();
+  final ketController = TextEditingController();
+  bool isLoading = false;
+
+  // History kasbon
+  List historyKasbon = [];
+  Map<String, dynamic>? historySummary;
+  bool isLoadingHistory = false;
+  double currentKasbon = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    currentKasbon = widget.kasbonAwal;
+    fetchHistory();
+  }
+
+  Future<void> fetchHistory() async {
+    setState(() => isLoadingHistory = true);
+    try {
+      final res = await http.get(Uri.parse('${AppConfig.baseUrl}/api/kasbon/history/${widget.pelangganId}/?_t=${DateTime.now().millisecondsSinceEpoch}'));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        setState(() {
+          historyKasbon = (data['history'] ?? []).reversed.toList(); // tampilkan terbaru di atas
+          historySummary = data['summary'];
+          currentKasbon = double.tryParse(data['pelanggan']['total_kasbon_saat_ini'].toString()) ?? widget.kasbonAwal;
+        });
+      }
+    } catch (_) {} finally {
+      if (mounted) setState(() => isLoadingHistory = false);
+    }
+  }
+
+  Future<void> submitKasbon() async {
     if (nominalController.text.isEmpty) {
       showCustomSnackbar(context, 'Nominal tidak boleh kosong!', isError: true);
       return; 
@@ -450,11 +480,14 @@ class _FormKasbonScreenState extends State<FormKasbonScreen> {
       ); 
       final result = json.decode(response.body); 
       
-      if (response.statusCode == 200 && result['status'] == 'sukses') { 
-        if (!mounted) return; 
-        Navigator.pop(context); 
-        showCustomSnackbar(context, 'Data Kasbon berhasil dicatat!'); 
-      } else { 
+      if (response.statusCode == 200 && result['status'] == 'sukses') {
+        if (!mounted) return;
+        // Refresh history & saldo, jangan langsung pop biar user liat update
+        nominalController.clear();
+        ketController.clear();
+        await fetchHistory();
+        if (mounted) showCustomSnackbar(context, 'Data Kasbon berhasil dicatat!');
+      } else {
         if (!mounted) return; 
         showCustomSnackbar(context, result['pesan'], isError: true); 
       } 
@@ -464,6 +497,69 @@ class _FormKasbonScreenState extends State<FormKasbonScreen> {
       if (mounted) setState(() => isLoading = false); 
     } 
   } 
+
+  Widget _buildMiniStat(String label, String value, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(label, style: TextStyle(fontSize: 9, color: color.withOpacity(0.7), fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w900)),
+      ],
+    );
+  }
+
+  Widget _buildHistoryItem(Map h) {
+    final bool isPinjam = h['tipe'] == 'PINJAM';
+    final Color color = isPinjam ? Colors.red.shade600 : Colors.teal.shade700;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            child: Icon(isPinjam ? Icons.south_west_rounded : Icons.north_east_rounded, color: color, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                      child: Text(h['tipe'] ?? '-', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: color)),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(h['tanggal'] ?? '-', style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(h['keterangan'] ?? '-', style: TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text((isPinjam ? '+' : '-') + ' ' + formatRp(h['nominal']), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color)),
+              const SizedBox(height: 2),
+              Text('Saldo: ${formatRp(h['saldo_setelah'])}', style: TextStyle(fontSize: 9, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSultanInput({required TextEditingController controller, required String hint, required IconData icon, bool isNumber = false}) {
     return Container(
@@ -520,15 +616,15 @@ class _FormKasbonScreenState extends State<FormKasbonScreen> {
                         width: double.infinity,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: widget.kasbonAwal > 0 
-                              ? [Colors.red.shade800, Colors.red.shade500] 
+                            colors: currentKasbon > 0
+                              ? [Colors.red.shade800, Colors.red.shade500]
                               : [Colors.teal.shade800, Colors.teal.shade500],
                             begin: Alignment.topLeft, end: Alignment.bottomRight
                           ),
-                          borderRadius: BorderRadius.circular(24), 
+                          borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: (widget.kasbonAwal > 0 ? Colors.red : Colors.teal).withOpacity(0.3), 
+                              color: (currentKasbon > 0 ? Colors.red : Colors.teal).withOpacity(0.3),
                               blurRadius: 20, offset: const Offset(0, 10)
                             )
                           ]
@@ -538,13 +634,25 @@ class _FormKasbonScreenState extends State<FormKasbonScreen> {
                           children: [
                             Row(
                               children: [
-                                Icon(widget.kasbonAwal > 0 ? Icons.warning_amber_rounded : Icons.check_circle_outline, color: Colors.white70, size: 20), 
-                                const SizedBox(width: 8), 
+                                Icon(currentKasbon > 0 ? Icons.warning_amber_rounded : Icons.check_circle_outline, color: Colors.white70, size: 20),
+                                const SizedBox(width: 8),
                                 Text('TOTAL HUTANG SAAT INI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white.withOpacity(0.8), letterSpacing: 1.5))
                               ]
                             ),
                             const SizedBox(height: 16),
-                            Text(formatRp(widget.kasbonAwal), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -1)),
+                            Text(formatRp(currentKasbon), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -1)),
+                            if (historySummary != null) ...[
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(child: _buildMiniStat('Total Pinjam', formatRp(historySummary!['total_pinjam'] ?? 0), Colors.white)),
+                                  Container(width: 1, height: 32, color: Colors.white24),
+                                  Expanded(child: _buildMiniStat('Total Setor', formatRp(historySummary!['total_setor'] ?? 0), Colors.white)),
+                                  Container(width: 1, height: 32, color: Colors.white24),
+                                  Expanded(child: _buildMiniStat('Transaksi', '${historySummary!['jumlah_transaksi'] ?? 0}x', Colors.white)),
+                                ],
+                              ),
+                            ],
                           ]
                         )
                       ),
@@ -631,13 +739,39 @@ class _FormKasbonScreenState extends State<FormKasbonScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 24), 
-                      
+                      const SizedBox(height: 24),
+
                       // --- INPUT KETERANGAN ---
                       const Text('KETERANGAN / CATATAN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.2, color: Colors.black45)),
                       const SizedBox(height: 12),
-                      _buildSultanInput(controller: ketController, hint: 'Catatan tambahan (Opsional)', icon: Icons.notes_rounded), 
-                      
+                      _buildSultanInput(controller: ketController, hint: 'Catatan tambahan (Opsional)', icon: Icons.notes_rounded),
+
+                      const SizedBox(height: 32),
+
+                      // --- HISTORY TRANSAKSI KASBON ---
+                      Row(
+                        children: [
+                          Icon(Icons.history_rounded, size: 16, color: Colors.black54),
+                          const SizedBox(width: 8),
+                          const Text('RIWAYAT TRANSAKSI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.2, color: Colors.black45)),
+                          const Spacer(),
+                          if (historyKasbon.isNotEmpty)
+                            Text('${historyKasbon.length} entry', style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      if (isLoadingHistory)
+                        const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+                      else if (historyKasbon.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey.shade200)),
+                          child: Center(child: Text('Belum ada riwayat transaksi.', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600))),
+                        )
+                      else
+                        ...historyKasbon.map((h) => _buildHistoryItem(h)),
+
                       const SizedBox(height: 120), // Spasi buat dock
                     ]
                   ),
