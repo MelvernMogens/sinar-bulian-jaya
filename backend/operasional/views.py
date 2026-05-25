@@ -188,10 +188,10 @@ def buat_nota(request):
             pakai_buruh = data.get('pakai_buruh', True)
             pakai_materai = data.get('pakai_materai', True)
 
-            total_bayar_semua = Decimal('0')
-            sisa_kasbon_cek = setoran_pinjaman
-            
-            for idx, item in enumerate(items_db):
+            # === Pass 1: hitung bersih per item supaya bisa distribusi kasbon proporsional ===
+            items_list = list(items_db)
+            bersih_per_item = []
+            for idx, item in enumerate(items_list):
                 b = item.tonase
                 h = item.harga_input
                 kotor = b * h
@@ -199,11 +199,35 @@ def buat_nota(request):
                 buruh = round_up_ribuan(b * Decimal('35')) if pakai_buruh else Decimal('0')
                 materai = Decimal('6000') if (pakai_materai and idx == 0) else Decimal('0')
                 bersih = kotor - komisi - buruh - materai
-                
-                potong = min(bersih, sisa_kasbon_cek) if sisa_kasbon_cek > 0 else Decimal('0')
-                sisa_kasbon_cek -= potong
-                bayar = round_down_ribuan(bersih - potong)
-                total_bayar_semua += bayar
+                bersih_per_item.append(bersih)
+
+            total_bersih_all = sum(bersih_per_item) or Decimal('1')
+            # Total bayar (setelah potong kasbon) — single round_down supaya match frontend
+            total_bayar_semua = round_down_ribuan(total_bersih_all - setoran_pinjaman)
+            if total_bayar_semua < 0:
+                total_bayar_semua = Decimal('0')
+
+            # === Distribusi proporsional total bayar ke setiap item ===
+            # Last item ambil sisa supaya total exact, no rounding gap
+            bayar_net_per_item = []
+            potong_per_item = []
+            running_bayar = Decimal('0')
+            running_potong = Decimal('0')
+            for idx, bersih in enumerate(bersih_per_item):
+                if idx == len(bersih_per_item) - 1:
+                    # Last: ambil sisa
+                    bayar = total_bayar_semua - running_bayar
+                    potong = setoran_pinjaman - running_potong
+                else:
+                    ratio = bersih / total_bersih_all
+                    bayar = round_down_ribuan(total_bayar_semua * ratio)
+                    potong = round_down_ribuan(setoran_pinjaman * ratio)
+                    running_bayar += bayar
+                    running_potong += potong
+                if bayar < 0: bayar = Decimal('0')
+                if potong < 0: potong = Decimal('0')
+                bayar_net_per_item.append(bayar)
+                potong_per_item.append(potong)
 
             total_kebutuhan_cash = Decimal('0')
             if not is_split:
@@ -221,28 +245,20 @@ def buat_nota(request):
 
             with transaction.atomic():
                 pelanggan = Pelanggan.objects.get(id=pelanggan_id)
-                sisa_kasbon = setoran_pinjaman
-                
-                sisa_uang_metode_1 = nominal_1 
+
+                sisa_uang_metode_1 = nominal_1
                 first_nota_id = None
-                
+
                 if setoran_pinjaman > 0:
                     pelanggan.total_kasbon -= setoran_pinjaman
                     pelanggan.save()
                     BukuKasbon.objects.create(pelanggan=pelanggan, tipe_transaksi='SETOR', nominal=setoran_pinjaman, keterangan='Potong Kasbon via Nota')
 
-                for idx, item in enumerate(items_db):
+                for idx, item in enumerate(items_list):
                     b = item.tonase
                     h = item.harga_input
-                    kotor = b * h
-                    komisi = round_up_ribuan(kotor * Decimal('0.01')) if pakai_komisi else Decimal('0')
-                    buruh = round_up_ribuan(b * Decimal('35')) if pakai_buruh else Decimal('0')
-                    materai = Decimal('6000') if (pakai_materai and idx == 0) else Decimal('0')
-                    bersih = kotor - komisi - buruh - materai
-                    
-                    potong = min(bersih, sisa_kasbon) if sisa_kasbon > 0 else Decimal('0')
-                    sisa_kasbon -= potong
-                    bayar_net = round_down_ribuan(bersih - potong)
+                    # Pakai precomputed bayar_net & potong dari Pass 1 (proporsional)
+                    bayar_net = bayar_net_per_item[idx]
 
                     bayar_1_nota = Decimal('0')
                     bayar_2_nota = Decimal('0')
@@ -308,7 +324,7 @@ def buat_nota(request):
                             nominal=bayar_1_nota,
                             tanggal_bayar=parse_date(tanggal_tf) if (metode_bayar == 'TF' and tanggal_tf) else timezone.now().date(),
                             keterangan='Pelunasan' if not is_split else f'Split 1 ({metode_bayar})', 
-                            is_setoran_pinjaman=True if (potong > 0 and idx == 0) else False,
+                            is_setoran_pinjaman=True if potong_per_item[idx] > 0 else False,
                             is_selesai=False if metode_bayar == 'TF' else True
                         )
 
