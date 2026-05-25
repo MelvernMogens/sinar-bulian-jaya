@@ -111,11 +111,20 @@ class _LaporanScreenState extends State<LaporanScreen> {
             ),
             actionsPadding: const EdgeInsets.only(bottom: 16, right: 16, left: 16),
             actions: [
+              TextButton.icon(
+                onPressed: isSubmittingDialog ? null : () {
+                  Navigator.pop(context);
+                  _konfirmasiHapusTransaksiUmum(tipe, id, keteranganLama, nominalLama);
+                },
+                icon: Icon(Icons.delete_outline_rounded, color: Colors.red.shade600, size: 16),
+                label: Text('Hapus', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold)),
+              ),
+              const Spacer(),
               TextButton(onPressed: isSubmittingDialog ? null : () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
                 onPressed: isSubmittingDialog ? null : () async {
-                  setStateDialog(() => isSubmittingDialog = true); 
+                  setStateDialog(() => isSubmittingDialog = true);
                   String nominalMurni = nomController.text.replaceAll(RegExp(r'[^0-9]'), '');
                   int nominalAngka = int.tryParse(nominalMurni) ?? 0;
                   try {
@@ -129,15 +138,15 @@ class _LaporanScreenState extends State<LaporanScreen> {
                     );
                     if (!mounted) return;
                     if (res.statusCode == 200) {
-                        isDialogClosed = true; 
+                        isDialogClosed = true;
                         Navigator.pop(context);
                         showCustomSnackbar(context, 'Berhasil diupdate!');
-                        fetchLaporan(); 
+                        fetchLaporan();
                     }
                   } catch (e) {
                     if (mounted) showCustomSnackbar(context, 'Koneksi bermasalah!', isError: true);
                   } finally {
-                    if (!isDialogClosed) setStateDialog(() => isSubmittingDialog = false); 
+                    if (!isDialogClosed) setStateDialog(() => isSubmittingDialog = false);
                   }
                 },
                 child: isSubmittingDialog ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -147,6 +156,63 @@ class _LaporanScreenState extends State<LaporanScreen> {
         }
       ),
     );
+  }
+
+  void _konfirmasiHapusTransaksiUmum(String tipe, int id, String keterangan, double nominal) {
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(children: [
+        Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 22),
+        const SizedBox(width: 8),
+        Expanded(child: Text('Hapus $tipe?', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15))),
+      ]),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(keterangan, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red.shade900)),
+            const SizedBox(height: 2),
+            Text(formatRp(nominal), style: TextStyle(fontSize: 11, color: Colors.red.shade700, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+        const SizedBox(height: 8),
+        Text('Mutasi kas terkait akan ikut dihapus. Tercatat di audit log.', style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontStyle: FontStyle.italic)),
+      ]),
+      actionsPadding: const EdgeInsets.only(bottom: 12, right: 12, left: 12),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          icon: const Icon(Icons.delete_forever_rounded, size: 16),
+          label: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+          onPressed: () { Navigator.pop(ctx); _eksekusiHapusTransaksi(tipe, id); },
+        ),
+      ],
+    ));
+  }
+
+  Future<void> _eksekusiHapusTransaksi(String tipe, int id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = prefs.getString('username') ?? 'Sistem';
+      final res = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/api/laporan/hapus_transaksi/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'tipe': tipe, 'id': id, 'username': username}),
+      );
+      if (!mounted) return;
+      final body = json.decode(res.body);
+      if (res.statusCode == 200) {
+        showCustomSnackbar(context, body['pesan'] ?? 'Dihapus.');
+        fetchLaporan();
+      } else {
+        showCustomSnackbar(context, body['pesan'] ?? 'Gagal.', isError: true);
+      }
+    } catch (_) {
+      if (mounted) showCustomSnackbar(context, 'Koneksi gagal!', isError: true);
+    }
   }
 
   // =======================================================================
@@ -538,6 +604,82 @@ class _LaporanScreenState extends State<LaporanScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // === WRAPPER PER PETANI ===
+  // Kalau petani cuma punya 1 nota hari itu → langsung render _buildNotaCardGrouped
+  // Kalau >1 nota → tampilkan 1 parent card dengan total kumulatif + expandable
+  // berisi list nota individual.
+  Widget _buildPetaniNotaCard(Map g) {
+    final String nama = g['nama_pelanggan'] ?? '-';
+    final List notas = g['notas'] ?? [];
+    if (notas.length == 1) {
+      return _buildNotaCardGrouped(Map<String, dynamic>.from(notas.first));
+    }
+
+    // Multi-nota: hitung total kumulatif & status
+    double totalKumulatif = 0;
+    bool anyUnpaidBB = false;
+    int totalPembayaran = 0;
+    for (var n in notas) {
+      totalKumulatif += double.tryParse((n['total_nota_full'] ?? 0).toString()) ?? 0;
+      final List<dynamic> pays = n['payments'] ?? [];
+      totalPembayaran += pays.length;
+      if (pays.any((p) => p['metode'] == 'BB' && p['is_lunas'] != true)) anyUnpaidBB = true;
+    }
+    final Color headerColor = anyUnpaidBB ? Colors.red.shade600 : Colors.teal.shade700;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: headerColor.withOpacity(0.3), width: 1.5),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: headerColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            child: Icon(Icons.person_rounded, color: headerColor, size: 22),
+          ),
+          title: Row(
+            children: [
+              Expanded(child: Text(nama, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(6)),
+                child: Text('${notas.length} nota', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.amber.shade900)),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                const Text('Total Hari Ini', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                Text(formatRp(totalKumulatif), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: headerColor)),
+              ],
+            ),
+          ),
+          iconColor: headerColor,
+          collapsedIconColor: headerColor.withOpacity(0.6),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16))),
+              child: Column(
+                children: notas.map<Widget>((n) => _buildNotaCardGrouped(Map<String, dynamic>.from(n))).toList(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1054,6 +1196,17 @@ class _LaporanScreenState extends State<LaporanScreen> {
     }
     final List<Map<String, dynamic>> groupedNotas = _groupedMap.values.toList();
 
+    // Group nota PER PETANI — 1 petani dalam 1 hari = 1 card (multi-nota nested)
+    final Map<String, List<Map<String, dynamic>>> _byPetani = {};
+    for (var n in groupedNotas) {
+      final String nama = (n['nama_pelanggan'] ?? '-').toString();
+      _byPetani.putIfAbsent(nama, () => []).add(n);
+    }
+    final List<Map<String, dynamic>> notaPerPetani = _byPetani.entries.map((e) => {
+      'nama_pelanggan': e.key,
+      'notas': e.value,
+    }).toList();
+
     bool isDataKosong = transaksiKasMasuk.isEmpty && transaksiNota.isEmpty && transaksiPengeluaran.isEmpty && transaksiKasKeluarLain.isEmpty && transaksiPelunasan.isEmpty && transaksiSetoranKasbon.isEmpty;
     
     return Scaffold(
@@ -1127,9 +1280,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
                               ...transaksiKasMasuk.map((k) => _buildTransactionCard(title: k['keterangan'], subtitle: 'Kas Masuk', amountText: "+ ${formatRp(k['nominal'])}", color: Colors.green.shade600, onTap: () => _tampilkanDialogEditUmum('Kas Masuk', k['id'], k['keterangan'], double.parse(k['nominal'].toString())))),
                             ],
                             
-                            if (groupedNotas.isNotEmpty) ...[
+                            if (notaPerPetani.isNotEmpty) ...[
                               _buildSectionHeader('PEMBELIAN NOTA', Colors.teal.shade600, Icons.receipt_rounded),
-                              ...groupedNotas.map((g) => _buildNotaCardGrouped(g)),
+                              ...notaPerPetani.map((g) => _buildPetaniNotaCard(g)),
                             ],
 
                             // --- TAMPILAN BARU: PELUNASAN HUTANG ---

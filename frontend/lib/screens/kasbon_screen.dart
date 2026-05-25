@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../utils/helpers.dart';
-import '../utils/constants.dart'; 
+import '../utils/constants.dart';
 
 class MenuKasbonScreen extends StatefulWidget { 
   const MenuKasbonScreen({super.key}); 
@@ -556,9 +557,84 @@ class _FormKasbonScreenState extends State<FormKasbonScreen> {
               Text('Saldo: ${formatRp(h['saldo_setelah'])}', style: TextStyle(fontSize: 9, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
             ],
           ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: () => _konfirmasiHapusKasbonEntry(h['id'], h['tipe'], h['nominal'], h['keterangan']),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, size: 16, color: Colors.grey.shade400),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  void _konfirmasiHapusKasbonEntry(dynamic entryId, String tipe, dynamic nominal, String? keterangan) {
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 22),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('Hapus Riwayat?', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15))),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$tipe — ${formatRp(nominal)}', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.red.shade900, fontSize: 13)),
+                if (keterangan != null && keterangan.isNotEmpty) Text(keterangan, style: TextStyle(fontSize: 11, color: Colors.red.shade700)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text('Akan auto-reverse: total_kasbon petani + mutasi kas terkait (kalau ada). Tercatat di audit log.',
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontStyle: FontStyle.italic)),
+        ],
+      ),
+      actionsPadding: const EdgeInsets.only(bottom: 12, right: 12, left: 12),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          icon: const Icon(Icons.delete_forever_rounded, size: 16),
+          label: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+          onPressed: () { Navigator.pop(ctx); _eksekusiHapusKasbonEntry(entryId); },
+        ),
+      ],
+    ));
+  }
+
+  Future<void> _eksekusiHapusKasbonEntry(dynamic entryId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentUsername = prefs.getString('username') ?? 'Sistem';
+      final res = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/api/kasbon/hapus_entry/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'entry_id': entryId, 'username': currentUsername}),
+      );
+      if (!mounted) return;
+      final body = json.decode(res.body);
+      if (res.statusCode == 200) {
+        showCustomSnackbar(context, body['pesan'] ?? 'Riwayat dihapus.');
+        await fetchHistory();
+      } else {
+        showCustomSnackbar(context, body['pesan'] ?? 'Gagal hapus.', isError: true);
+      }
+    } catch (e) {
+      if (mounted) showCustomSnackbar(context, 'Koneksi gagal!', isError: true);
+    }
   }
 
   Widget _buildSultanInput({required TextEditingController controller, required String hint, required IconData icon, bool isNumber = false}) {

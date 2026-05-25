@@ -1021,6 +1021,152 @@ def _audit_log_hapus_item(item, username, reason=''):
 
 
 @csrf_exempt
+def hapus_transaksi(request):
+    """Hapus Kas Masuk / Kas Keluar / Pengeluaran dari laporan harian (with audit log)."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        tipe = data.get('tipe')
+        obj_id = data.get('id')
+        username = data.get('username')
+        editor = User.objects.filter(username=username).first() if username else None
+
+        with transaction.atomic():
+            if tipe in ('Kas Masuk', 'Kas Keluar'):
+                kas = KasGudang.objects.get(id=obj_id)
+                ket = f"Hapus {tipe} [{kas.keterangan}] Rp {float(kas.nominal):,.0f}"
+                kas.delete()
+            elif tipe == 'Pengeluaran':
+                peng = Pengeluaran.objects.get(id=obj_id)
+                ket = f"Hapus Pengeluaran [{peng.kategori}] {peng.keterangan} Rp {float(peng.nominal_total):,.0f}"
+                # Cari KasGudang KELUAR yang link
+                kas = KasGudang.objects.filter(
+                    keterangan=f'Pengeluaran [{peng.kategori}]: {peng.keterangan}',
+                    nominal=peng.nominal_total
+                ).first()
+                if kas: kas.delete()
+                peng.delete()
+            else:
+                return JsonResponse({'status': 'gagal', 'pesan': f'Tipe "{tipe}" tidak didukung.'}, status=400)
+
+            if editor:
+                LogAktivitas.objects.create(user=editor, modul=tipe, aksi='HAPUS', keterangan=ket)
+
+        return JsonResponse({'status': 'sukses', 'pesan': f'{tipe} dihapus.'})
+    except (KasGudang.DoesNotExist, Pengeluaran.DoesNotExist):
+        return JsonResponse({'status': 'gagal', 'pesan': 'Data tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+
+@csrf_exempt
+def hapus_kasbon_entry(request):
+    """Hapus 1 entry BukuKasbon (PINJAM / SETOR) + reverse total_kasbon pelanggan + reverse KasGudang."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        entry_id = data.get('entry_id')
+        username = data.get('username')
+        editor = User.objects.filter(username=username).first() if username else None
+
+        with transaction.atomic():
+            entry = BukuKasbon.objects.get(id=entry_id)
+            pelanggan = entry.pelanggan
+            nominal = Decimal(str(entry.nominal))
+
+            # Reverse total_kasbon pelanggan
+            if entry.tipe_transaksi == 'PINJAM':
+                # PINJAM nambah kasbon → hapus = kurangi kasbon
+                pelanggan.total_kasbon -= nominal
+                # Reverse KasGudang KELUAR ('Kasbon Keluar')
+                kas_link = KasGudang.objects.filter(
+                    tipe_mutasi='KELUAR',
+                    keterangan=f'Kasbon Keluar: {pelanggan.nama}',
+                    nominal=nominal
+                ).first()
+                if kas_link: kas_link.delete()
+            else:  # SETOR
+                # SETOR ngurangi kasbon → hapus = nambah kasbon (kembalikan)
+                pelanggan.total_kasbon += nominal
+                # Reverse KasGudang MASUK ('Setoran Kasbon') KECUALI kalau SETOR via nota
+                # (yang via nota bukan kas masuk, tapi potong dari nota)
+                if 'via Nota' not in (entry.keterangan or ''):
+                    kas_link = KasGudang.objects.filter(
+                        tipe_mutasi='MASUK',
+                        keterangan=f'Setoran Kasbon: {pelanggan.nama}',
+                        nominal=nominal
+                    ).first()
+                    if kas_link: kas_link.delete()
+
+            if pelanggan.total_kasbon < 0:
+                pelanggan.total_kasbon = Decimal('0')
+            pelanggan.save()
+
+            ket = f"Hapus Kasbon [{entry.tipe_transaksi}] {pelanggan.nama} Rp {float(nominal):,.0f} ({entry.keterangan or '-'})"
+            entry.delete()
+
+            if editor:
+                LogAktivitas.objects.create(user=editor, modul='Kasbon', aksi='HAPUS', keterangan=ket)
+
+        return JsonResponse({'status': 'sukses', 'pesan': 'Riwayat kasbon dihapus.'})
+    except BukuKasbon.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Entry tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+
+@csrf_exempt
+def hapus_pengiriman(request):
+    """Hapus Pengiriman (kirim mobil / timbang taruh / stock) + cascade items + nota + kas."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        pengiriman_id = data.get('pengiriman_id')
+        username = data.get('username')
+        force = bool(data.get('force', False))
+        editor = User.objects.filter(username=username).first() if username else None
+
+        peng = Pengiriman.objects.get(id=pengiriman_id)
+        items = peng.items.all()
+        items_with_nota = [i for i in items if i.is_dibuat_nota]
+
+        # Kalau ada item yang sudah jadi nota, butuh force confirm
+        if items_with_nota and not force:
+            return JsonResponse({
+                'status': 'butuh_konfirmasi',
+                'pesan': f'Wadah ini punya {len(items_with_nota)} item yang sudah dibuat nota. Hapus akan cascade ke nota + pembayaran + kas + restore kasbon.',
+                'jumlah_item': len(items),
+                'jumlah_item_dengan_nota': len(items_with_nota),
+            }, status=409)
+
+        judul = peng.plat_mobil if peng.tipe == 'KIRIM' else peng.nama_stock
+        ket = f"Hapus Pengiriman [{peng.tipe}] [{judul}] — {len(items)} item ({len(items_with_nota)} sudah nota)"
+
+        with transaction.atomic():
+            # Cascade hapus nota terkait setiap item
+            for item in items:
+                if item.is_dibuat_nota:
+                    for nota in Nota.objects.filter(item_pengiriman=item):
+                        _cascade_hapus_nota(nota)
+                item.delete()
+
+            # Hapus pengiriman sendiri
+            peng.delete()
+
+            if editor:
+                LogAktivitas.objects.create(user=editor, modul='Pengiriman', aksi='HAPUS', keterangan=ket)
+
+        return JsonResponse({'status': 'sukses', 'pesan': f'Wadah {judul} dihapus.'})
+    except Pengiriman.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Pengiriman tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+
+@csrf_exempt
 def hapus_nota(request):
     """Hapus nota dari laporan harian (cascade pembayaran + kas + restore item)."""
     if request.method != 'POST':

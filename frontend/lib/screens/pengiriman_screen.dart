@@ -368,7 +368,26 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(color: isKirim ? Colors.amber.shade50 : Colors.teal.shade50, borderRadius: BorderRadius.circular(8)),
                       child: Text(statusText, style: TextStyle(color: isKirim ? Colors.amber.shade800 : Colors.teal.shade800, fontSize: 10, fontWeight: FontWeight.bold)),
-                    )
+                    ),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert_rounded, size: 18, color: Colors.grey.shade500),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      onSelected: (v) {
+                        if (v == 'hapus') _konfirmasiHapusPengiriman(p['id'], p['judul']);
+                      },
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'hapus',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline_rounded, color: Colors.red.shade600, size: 16),
+                              const SizedBox(width: 8),
+                              Text('Hapus Wadah', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -377,6 +396,77 @@ class _PengirimanScreenState extends State<PengirimanScreen> {
         );
       },
     );
+  }
+
+  Future<void> _konfirmasiHapusPengiriman(int id, String judul, {bool force = false}) async {
+    if (!force) {
+      // Show initial confirmation
+      bool? proceed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 22),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Hapus Wadah?', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15))),
+        ]),
+        content: Text('Hapus wadah [$judul]?', style: TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ));
+      if (proceed != true) return;
+    }
+    // Execute
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = prefs.getString('username') ?? 'Sistem';
+      final res = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/api/pengiriman/hapus/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'pengiriman_id': id, 'username': username, 'force': force}),
+      );
+      if (!mounted) return;
+      final body = json.decode(res.body);
+      if (res.statusCode == 200) {
+        showCustomSnackbar(context, body['pesan'] ?? 'Wadah dihapus.');
+        fetchAktif();
+      } else if (res.statusCode == 409) {
+        // Cascade confirm
+        bool? proceed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(children: [
+            Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 22),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Item Sudah Jadi Nota', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15))),
+          ]),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(body['pesan'] ?? 'Cascade needed', style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 8),
+            Text('Tetap hapus akan ikut hapus: item + nota + pembayaran + kas + restore kasbon.', style: TextStyle(fontSize: 11, color: Colors.red.shade900, fontWeight: FontWeight.w600)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              icon: const Icon(Icons.delete_forever_rounded, size: 16),
+              label: const Text('Tetap Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => Navigator.pop(ctx, true),
+            ),
+          ],
+        ));
+        if (proceed == true) _konfirmasiHapusPengiriman(id, judul, force: true);
+      } else {
+        showCustomSnackbar(context, body['pesan'] ?? 'Gagal hapus.', isError: true);
+      }
+    } catch (_) {
+      if (mounted) showCustomSnackbar(context, 'Koneksi gagal!', isError: true);
+    }
   }
 }
 
