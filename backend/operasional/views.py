@@ -848,22 +848,131 @@ def edit_item_pengiriman(request):
 
 @csrf_exempt
 def hapus_item_pengiriman(request):
+    """
+    Hapus item pengiriman. Kalau item sudah jadi nota, cascade:
+    - Hapus nota terkait
+    - Hapus pembayaran terkait (CASH/TF/BB/AMPERA)
+    - Rollback mutasi KasGudang (hapus row KELUAR yang ke-link)
+    - Restore pelanggan.total_kasbon kalau ada BB / setoran kasbon
+    Sebelumnya cascade ini butuh force=true. Sekarang otomatis dengan
+    konfirmasi di frontend.
+    """
     if request.method != 'POST':
         return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
     try:
         data = json.loads(request.body)
+        force = bool(data.get('force', False))
         item = ItemPengiriman.objects.get(id=data['item_id'])
-        # GUARD: jangan biarin hapus item yang sudah jadi nota — bakal merusak
-        # konsistensi laporan dan nota yang sudah dicetak/dibayar.
-        if item.is_dibuat_nota:
+
+        # Kalau item belum jadi nota, langsung hapus
+        if not item.is_dibuat_nota:
+            with transaction.atomic():
+                _audit_log_hapus_item(item, data.get('username'), reason='item only')
+                item.delete()
+            return JsonResponse({'status': 'sukses', 'pesan': 'Item dihapus.'})
+
+        # Item sudah jadi nota → butuh konfirmasi force
+        if not force:
             return JsonResponse({
-                'status': 'gagal',
-                'pesan': 'Item ini sudah dibuat nota — tidak bisa dihapus. Hapus nota-nya dulu.'
-            }, status=400)
-        item.delete()
-        return JsonResponse({'status': 'sukses'})
+                'status': 'butuh_konfirmasi',
+                'pesan': 'Item ini sudah dibuat nota. Menghapus akan ikut hapus nota, pembayaran, dan mutasi kas terkait.',
+            }, status=409)
+
+        with transaction.atomic():
+            # Hapus nota terkait (cascade-style)
+            for nota in Nota.objects.filter(item_pengiriman=item):
+                _cascade_hapus_nota(nota)
+            _audit_log_hapus_item(item, data.get('username'), reason='cascade with nota')
+            item.delete()
+        return JsonResponse({'status': 'sukses', 'pesan': 'Item & nota terkait dihapus.'})
     except ItemPengiriman.DoesNotExist:
         return JsonResponse({'status': 'gagal', 'pesan': 'Item tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+
+def _cascade_hapus_nota(nota):
+    """Helper: hapus nota + pembayaran + rollback kas + restore kasbon."""
+    # Rollback setoran kasbon kalau ada
+    setoran_pembs = Pembayaran.objects.filter(nota=nota, is_setoran_pinjaman=True)
+    total_setoran = sum([Decimal(str(p.nominal)) for p in setoran_pembs]) or Decimal('0')
+    # Cek BukuKasbon SETOR yg terkait nota ini (via keterangan match approximate)
+    # Lebih simple: total setoran dari pembayaran is_setoran_pinjaman
+    if total_setoran > 0:
+        # Note: setoran_pinjaman record at buat_nota = full setoran (not per item).
+        # Tapi is_setoran_pinjaman flag bisa multiple kalau split di hapus_item beberapa kali.
+        # Restore kasbon dengan ambil dari BukuKasbon SETOR yang match keterangan
+        kasbon_setor_records = BukuKasbon.objects.filter(
+            pelanggan=nota.pelanggan,
+            tipe_transaksi='SETOR',
+            keterangan__icontains='Potong Kasbon via Nota'
+        ).order_by('-tanggal')[:1]  # ambil yg paling baru
+        if kasbon_setor_records:
+            for kb in kasbon_setor_records:
+                nota.pelanggan.total_kasbon += Decimal(str(kb.nominal))
+                nota.pelanggan.save()
+                kb.delete()
+
+    # Rollback total_kasbon kalau nota status BB (utang baru ke-create saat buat_nota? No,
+    # BB hanya nambah BukuKasbon PINJAM tidak dilakukan di buat_nota. Skip.)
+
+    # Rollback KasGudang KELUAR (untuk CASH payments) ter-link ke nota
+    kas_rows = KasGudang.objects.filter(keterangan__startswith=f'Pembayaran Nota #{nota.id}')
+    for k in kas_rows:
+        k.delete()
+    # Juga kalau ada Pelunasan BB rolling back
+    kas_pelunasan = KasGudang.objects.filter(keterangan__startswith=f'Pelunasan BB Nota #{nota.id}')
+    for k in kas_pelunasan:
+        k.delete()
+
+    # Hapus semua Pembayaran terkait nota
+    Pembayaran.objects.filter(nota=nota).delete()
+
+    # Hapus nota sendiri
+    nota.delete()
+
+
+def _audit_log_hapus_item(item, username, reason=''):
+    editor = User.objects.filter(username=username).first() if username else None
+    judul = item.pengiriman.plat_mobil if item.pengiriman.tipe == 'KIRIM' else item.pengiriman.nama_stock
+    LogAktivitas.objects.create(
+        user=editor, modul='ItemPengiriman', aksi='HAPUS',
+        keterangan=f'Hapus item [{item.nama_tujuan}] {float(item.tonase):.0f}kg dari {judul} ({reason})'
+    )
+
+
+@csrf_exempt
+def hapus_nota(request):
+    """Hapus nota dari laporan harian (cascade pembayaran + kas + restore item)."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        nota = Nota.objects.get(id=data['nota_id'])
+        username = data.get('username')
+        # Optional: restore_item (default True) — set item.is_dibuat_nota=False supaya
+        # bisa dibuat nota ulang. Kalau False, item tetap is_dibuat_nota=True (jarang).
+        restore_item = bool(data.get('restore_item', True))
+
+        with transaction.atomic():
+            # Log dulu sebelum hapus
+            editor = User.objects.filter(username=username).first() if username else None
+            LogAktivitas.objects.create(
+                user=editor, modul='Nota', aksi='HAPUS',
+                keterangan=f'Hapus Nota #{nota.id} ({nota.pelanggan.nama}) — berat {float(nota.berat_kg):.0f}kg, harga Rp{float(nota.harga_per_kg):,.0f}'
+            )
+
+            # Restore item.is_dibuat_nota = False kalau ada link
+            if restore_item and nota.item_pengiriman_id:
+                item = nota.item_pengiriman
+                item.is_dibuat_nota = False
+                item.save()
+
+            _cascade_hapus_nota(nota)
+
+        return JsonResponse({'status': 'sukses', 'pesan': 'Nota dihapus.'})
+    except Nota.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Nota tidak ditemukan.'}, status=404)
     except Exception as e:
         return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
 

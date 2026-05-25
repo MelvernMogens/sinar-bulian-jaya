@@ -31,6 +31,7 @@ from operasional.views import (
     hapus_lot,
     edit_item_pengiriman,
     hapus_item_pengiriman,
+    hapus_nota,
     api_login,
     list_log_aktivitas,
     prediksi_harga_ai,
@@ -56,6 +57,7 @@ urlpatterns = [
     path('api/pengeluaran/tambah/', tambah_pengeluaran, name='tambah_pengeluaran'),
     path('api/laporan/', laporan_harian, name='laporan_harian'),
     path('api/laporan/edit/', edit_transaksi, name='edit_transaksi'),
+    path('api/laporan/hapus_nota/', hapus_nota, name='hapus_nota'),
     
     path('api/pengiriman/aktif/', list_pengiriman_aktif, name='list_pengiriman_aktif'),
     path('api/pengiriman/buat/', buat_pengiriman, name='buat_pengiriman'),

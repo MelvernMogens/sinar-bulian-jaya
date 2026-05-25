@@ -425,15 +425,58 @@ class _DetailPengirimanScreenState extends State<DetailPengirimanScreen> {
     fetchData();
   }
 
-  Future<void> hapusMuatan(int itemId) async {
+  Future<void> hapusMuatan(int itemId, {bool force = false}) async {
     try {
-      await http.post(
-        Uri.parse('${AppConfig.baseUrl}/api/pengiriman/item/hapus/'), 
+      final prefs = await SharedPreferences.getInstance();
+      final currentUsername = prefs.getString('username') ?? 'Sistem';
+      final res = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/api/pengiriman/item/hapus/'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'item_id': itemId})
+        body: json.encode({'item_id': itemId, 'force': force, 'username': currentUsername}),
       );
-      fetchData(); 
-      if (mounted) showCustomSnackbar(context, 'Muatan dihapus!');
+      if (!mounted) return;
+      final body = json.decode(res.body);
+      if (res.statusCode == 200) {
+        fetchData();
+        showCustomSnackbar(context, body['pesan'] ?? 'Muatan dihapus!');
+      } else if (res.statusCode == 409) {
+        // Butuh konfirmasi force karena item sudah jadi nota
+        showDialog(context: context, builder: (ctx) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 24),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Item Sudah Jadi Nota', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15))),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(body['pesan'] ?? 'Cascade delete diperlukan.', style: TextStyle(fontSize: 12, color: Colors.grey.shade800)),
+              const SizedBox(height: 8),
+              Text('Aksi ini akan menghapus juga:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade900)),
+              const SizedBox(height: 4),
+              Text('• Nota terkait\n• Pembayaran (CASH/TF/BB)\n• Mutasi Kas Gudang\n• Restore kasbon pelanggan jika ada setoran',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.only(bottom: 12, right: 12, left: 12),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              icon: const Icon(Icons.delete_forever_rounded, size: 16),
+              label: const Text('Tetap Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () { Navigator.pop(ctx); hapusMuatan(itemId, force: true); },
+            ),
+          ],
+        ));
+      } else {
+        showCustomSnackbar(context, body['pesan'] ?? 'Gagal menghapus muatan!', isError: true);
+      }
     } catch (e) {
       if (mounted) showCustomSnackbar(context, 'Gagal menghapus muatan!', isError: true);
     }

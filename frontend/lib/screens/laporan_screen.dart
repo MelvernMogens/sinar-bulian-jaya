@@ -150,6 +150,91 @@ class _LaporanScreenState extends State<LaporanScreen> {
   // =======================================================================
   // DIALOG EDIT NOTA KHUSUS
   // =======================================================================
+  void _konfirmasiHapusNota(int notaId, String namaPelanggan, double totalNotaFull) {
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 24),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('Hapus Nota?', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15))),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Nota #$notaId — $namaPelanggan', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.red.shade900)),
+                const SizedBox(height: 2),
+                Text(formatRp(totalNotaFull), style: TextStyle(fontSize: 11, color: Colors.red.shade700, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text('Aksi ini akan menghapus:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade900)),
+          const SizedBox(height: 4),
+          Text(
+            '• Nota & detail breakdown\n'
+            '• Semua pembayaran (CASH/TF/BB)\n'
+            '• Mutasi kas gudang terkait\n'
+            '• Restore kasbon pelanggan kalau ada setoran\n'
+            '• Item pengiriman bisa dibuat nota ulang',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade700, height: 1.4),
+          ),
+          const SizedBox(height: 8),
+          Text('Tercatat di Log Aktivitas. Tidak bisa dibatalkan.',
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
+        ],
+      ),
+      actionsPadding: const EdgeInsets.only(bottom: 12, right: 12, left: 12),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+        ),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red.shade700, foregroundColor: Colors.white,
+            elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          icon: const Icon(Icons.delete_forever_rounded, size: 16),
+          label: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+          onPressed: () { Navigator.pop(ctx); _eksekusiHapusNota(notaId, namaPelanggan); },
+        ),
+      ],
+    ));
+  }
+
+  Future<void> _eksekusiHapusNota(int notaId, String namaPelanggan) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentUsername = prefs.getString('username') ?? 'Sistem';
+      final res = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/api/laporan/hapus_nota/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'nota_id': notaId, 'username': currentUsername, 'restore_item': true}),
+      );
+      if (!mounted) return;
+      final body = json.decode(res.body);
+      if (res.statusCode == 200) {
+        showCustomSnackbar(context, body['pesan'] ?? 'Nota dihapus.');
+        fetchLaporan();
+      } else {
+        showCustomSnackbar(context, body['pesan'] ?? 'Gagal hapus nota.', isError: true);
+      }
+    } catch (e) {
+      if (mounted) showCustomSnackbar(context, 'Koneksi ke server gagal!', isError: true);
+    }
+  }
+
   void _tampilkanDialogEditNota(int id, String namaPelanggan, double beratLama, double hargaLama, double totalLama) {
     String strBerat = beratLama.toString();
     if (strBerat.endsWith('.0')) strBerat = strBerat.replaceAll('.0', '');
@@ -718,6 +803,20 @@ class _LaporanScreenState extends State<LaporanScreen> {
                         ),
                       )
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                        side: BorderSide(color: Colors.red.shade200),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                      label: const Text('Hapus Nota', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      onPressed: () => _konfirmasiHapusNota(notaId, namaPelanggan, totalNotaFull),
+                    ),
                   )
                 ],
               ),
