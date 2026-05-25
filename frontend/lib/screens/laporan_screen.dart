@@ -357,6 +357,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   if (sisaSebelumKasbon > totalBersihApi) {
                       kasbon = sisaSebelumKasbon - totalBersihApi;
                   }
+                  if (kasbon < 1000) kasbon = 0;
 
                   _eksekusiCetakRePrint(t['id'].toString(), t['nama_pelanggan'], t['jam'] ?? '', t['metode'] ?? 'CASH', berat, harga, kotor, komisi, buruh, materai, kasbon, totalBersihApi);
                   
@@ -485,6 +486,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
     if (sisaSebelumKasbon > totalNotaFull) {
       kasbon = sisaSebelumKasbon - totalNotaFull;
     }
+    // Hide kasbon kalau cuma rounding remainder (< Rp 1.000)
+    if (kasbon < 1000) kasbon = 0;
 
     // Build payment summary string utk subtitle (e.g. "CASH 20jt + BB 5jt ✓")
     String paymentSummary = payments.map((p) {
@@ -760,6 +763,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
     if (sisaSebelumKasbon > totalNotaFull) {
         kasbon = sisaSebelumKasbon - totalNotaFull;
     }
+    if (kasbon < 1000) kasbon = 0;
 
     // Split-part: render simplified card (tanpa expandable breakdown)
     if (isSplitPart) {

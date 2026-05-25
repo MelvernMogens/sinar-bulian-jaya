@@ -622,12 +622,44 @@ def edit_transaksi(request):
                     materai = Decimal('6000') if nota.pakai_materai else Decimal('0')
                     total_bersih_baru = round_down_ribuan(kotor - komisi - buruh - materai)
                     
-                    pembayaran = Pembayaran.objects.filter(nota=nota).first()
-                    kas = KasGudang.objects.filter(keterangan__startswith=f'Pembayaran Nota #{nota.id}').first()
-
                     nota.save()
-                    if kas: kas.nominal = total_bersih_baru; kas.save()
-                    if pembayaran: pembayaran.nominal = total_bersih_baru; pembayaran.save()
+
+                    # ------ DISTRIBUSI ULANG PEMBAYARAN (handle split) ------
+                    # Ambil pembayaran ORIGINAL (exclude pelunasan BB/TF yg dilakukan terpisah)
+                    pembs = list(
+                        Pembayaran.objects.filter(nota=nota)
+                        .exclude(keterangan__in=['Pelunasan BB', 'Pelunasan TF'])
+                        .order_by('id')
+                    )
+                    total_old = sum([Decimal(str(p.nominal)) for p in pembs]) or Decimal('1')
+
+                    if len(pembs) == 1:
+                        # Single payment: langsung set ke total baru
+                        pembs[0].nominal = total_bersih_baru
+                        pembs[0].save()
+                    elif len(pembs) > 1:
+                        # Split: distribute proportional supaya ratio dipertahankan
+                        running = Decimal('0')
+                        for i, p in enumerate(pembs):
+                            if i == len(pembs) - 1:
+                                # Last one ambil sisanya supaya total exact
+                                p.nominal = max(Decimal('0'), total_bersih_baru - running)
+                            else:
+                                ratio = Decimal(str(p.nominal)) / total_old
+                                new_nom = (total_bersih_baru * ratio).quantize(Decimal('1'))
+                                p.nominal = new_nom
+                                running += new_nom
+                            p.save()
+
+                    # Update mutasi KasGudang yang ter-link (untuk CASH payments)
+                    # Strategy: per pembayaran CASH, find kas record dgn keterangan match & set ke nominal baru
+                    kas_records = list(KasGudang.objects.filter(
+                        keterangan__startswith=f'Pembayaran Nota #{nota.id}'
+                    ).order_by('id'))
+                    cash_pembs = [p for p in pembs if p.metode == 'CASH']
+                    for kas_rec, cash_p in zip(kas_records, cash_pembs):
+                        kas_rec.nominal = cash_p.nominal
+                        kas_rec.save()
 
                     # Sync ItemPengiriman terkait (kalau ada FK link) supaya laporan pengiriman ikut update
                     if nota.item_pengiriman_id:
