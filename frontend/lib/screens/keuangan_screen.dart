@@ -257,12 +257,22 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
   }
 
   @override void initState() { 
-    super.initState(); 
-    fetchData(); 
+    super.initState();
+    fetchData();
   }
 
-  @override 
-  Widget build(BuildContext context) { 
+  // Group list-of-map by nama → preserve order pertama kali muncul
+  Map<String, List<dynamic>> _groupByNama(List source) {
+    final Map<String, List<dynamic>> result = {};
+    for (var item in source) {
+      final String nama = (item['nama'] ?? '').toString();
+      result.putIfAbsent(nama, () => []).add(item);
+    }
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold( 
       backgroundColor: Colors.white,
       body: isPageLoading 
@@ -424,7 +434,7 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
                           ),
                           const SizedBox(height: 16), 
                           
-                          listBB.isEmpty 
+                          listBB.isEmpty
                             ? Container(
                                 width: double.infinity, padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid)),
@@ -437,70 +447,99 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
                                 ),
                               )
                             : Column(
-                                children: listBB.map((bb) {
-                                  String fTotal = formatRp(bb['total']);
-                                  return Container( 
-                                    margin: const EdgeInsets.only(bottom: 16), 
+                                children: _groupByNama(listBB).entries.map((entry) {
+                                  final String nama = entry.key;
+                                  final List notas = entry.value;
+                                  final double totalAll = notas.fold(0.0, (sum, n) => sum + (double.tryParse(n['total'].toString()) ?? 0));
+                                  final String fTotalAll = formatRp(totalAll);
+                                  final bool isMulti = notas.length > 1;
+
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 16),
                                     decoration: BoxDecoration(
-                                      color: Colors.white, 
-                                      borderRadius: BorderRadius.circular(20), 
-                                      border: Border.all(color: Colors.red.shade100), 
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: Colors.red.shade100),
                                       boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 5))]
-                                    ), 
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    ),
+                                    child: Theme(
+                                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                      child: ExpansionTile(
+                                        initiallyExpanded: !isMulti,
+                                        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                        leading: CircleAvatar(backgroundColor: Colors.red.shade50, radius: 18, child: Icon(Icons.warning_rounded, color: Colors.red.shade600, size: 18)),
+                                        title: Row(
+                                          children: [
+                                            Expanded(child: Text(nama, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87))),
+                                            if (isMulti) Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(6)),
+                                              child: Text('${notas.length} nota', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.amber.shade900)),
+                                            ),
+                                          ],
+                                        ),
+                                        subtitle: Padding(
+                                          padding: const EdgeInsets.only(top: 6),
+                                          child: Row(
                                             children: [
-                                              Row(
-                                                children: [
-                                                  CircleAvatar(backgroundColor: Colors.red.shade50, radius: 16, child: Icon(Icons.warning_rounded, color: Colors.red.shade600, size: 16)),
-                                                  const SizedBox(width: 10),
-                                                  Text(bb['nama'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)), 
-                                                ],
-                                              ),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(6)),
-                                                child: Text(bb['tgl'], style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade700)),
-                                              )
+                                              Text(isMulti ? 'Total Tagihan' : 'Tagihan', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                              const SizedBox(width: 8),
+                                              Text(fTotalAll, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
                                             ],
                                           ),
-                                          const SizedBox(height: 16),
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            children: [
-                                              Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text('Total Tagihan', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-                                                  const SizedBox(height: 2),
-                                                  Text(fTotal, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
-                                                ],
-                                              ),
-                                              ElevatedButton( 
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.red.shade600, 
-                                                  foregroundColor: Colors.white, 
-                                                  elevation: 0, 
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-                                                ), 
-                                                onPressed: () => konfirmasiLunasinBB(bb['id'], bb['nama'], fTotal), 
-                                                child: const Text('LUNASI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)) 
-                                              ) 
-                                            ],
-                                          )
+                                        ),
+                                        iconColor: Colors.red.shade600,
+                                        collapsedIconColor: Colors.red.shade400,
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(color: Colors.red.shade50.withOpacity(0.3), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20))),
+                                            padding: const EdgeInsets.all(12),
+                                            child: Column(
+                                              children: notas.map<Widget>((bb) {
+                                                final String fTotal = formatRp(bb['total']);
+                                                return Container(
+                                                  margin: const EdgeInsets.only(bottom: 8),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.shade100)),
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Row(
+                                                              children: [
+                                                                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(4)), child: Text('Nota #${bb['id']}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.red.shade800))),
+                                                                const SizedBox(width: 6),
+                                                                Text(bb['tgl'], style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                                                              ],
+                                                            ),
+                                                            const SizedBox(height: 4),
+                                                            Text(fTotal, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      ElevatedButton(
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors.red.shade600, foregroundColor: Colors.white,
+                                                          elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                        ),
+                                                        onPressed: () => konfirmasiLunasinBB(bb['id'], bb['nama'], fTotal),
+                                                        child: const Text('LUNASI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
                                         ],
                                       ),
-                                    ) 
+                                    ),
                                   );
                                 }).toList()
-                              ), 
+                              ),
 
                           const SizedBox(height: 40), 
                           
@@ -513,7 +552,7 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
                           ),
                           const SizedBox(height: 16), 
 
-                          listTF.isEmpty 
+                          listTF.isEmpty
                             ? Container(
                                 width: double.infinity, padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid)),
@@ -526,68 +565,97 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
                                 ),
                               )
                             : Column(
-                                children: listTF.map((tf) {
-                                  String fNom = formatRp(tf['nominal']);
-                                  return Container( 
-                                    margin: const EdgeInsets.only(bottom: 16), 
+                                children: _groupByNama(listTF).entries.map((entry) {
+                                  final String nama = entry.key;
+                                  final List items = entry.value;
+                                  final double totalAll = items.fold(0.0, (sum, n) => sum + (double.tryParse(n['nominal'].toString()) ?? 0));
+                                  final String fTotalAll = formatRp(totalAll);
+                                  final bool isMulti = items.length > 1;
+
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 16),
                                     decoration: BoxDecoration(
-                                      color: Colors.white, 
-                                      borderRadius: BorderRadius.circular(20), 
-                                      border: Border.all(color: Colors.blue.shade100), 
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: Colors.blue.shade100),
                                       boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 5))]
-                                    ), 
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    ),
+                                    child: Theme(
+                                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                      child: ExpansionTile(
+                                        initiallyExpanded: !isMulti,
+                                        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                        leading: CircleAvatar(backgroundColor: Colors.blue.shade50, radius: 18, child: Icon(Icons.account_balance_rounded, color: Colors.blue.shade600, size: 18)),
+                                        title: Row(
+                                          children: [
+                                            Expanded(child: Text(nama, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87))),
+                                            if (isMulti) Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(6)),
+                                              child: Text('${items.length} TF', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.amber.shade900)),
+                                            ),
+                                          ],
+                                        ),
+                                        subtitle: Padding(
+                                          padding: const EdgeInsets.only(top: 6),
+                                          child: Row(
                                             children: [
-                                              Row(
-                                                children: [
-                                                  CircleAvatar(backgroundColor: Colors.blue.shade50, radius: 16, child: Icon(Icons.account_balance_rounded, color: Colors.blue.shade600, size: 16)),
-                                                  const SizedBox(width: 10),
-                                                  Text(tf['nama'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)), 
-                                                ],
-                                              ),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
-                                                child: Text(tf['tgl_tf'], style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade700)),
-                                              )
+                                              Text(isMulti ? 'Total Antrian' : 'Antrian', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                              const SizedBox(width: 8),
+                                              Text(fTotalAll, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.blue.shade700)),
                                             ],
                                           ),
-                                          const SizedBox(height: 16),
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            children: [
-                                              Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text('Nominal Transfer', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-                                                  const SizedBox(height: 2),
-                                                  Text(fNom, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.blue.shade700)),
-                                                ],
-                                              ),
-                                              ElevatedButton.icon( 
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.blue.shade600, 
-                                                  foregroundColor: Colors.white, 
-                                                  elevation: 0, 
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-                                                ), 
-                                                onPressed: () => konfirmasiSelesaiTF(tf['id'], tf['nama'], fNom), 
-                                                icon: const Icon(Icons.check_rounded, size: 16),
-                                                label: const Text('SELESAI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)) 
-                                              ) 
-                                            ],
-                                          )
+                                        ),
+                                        iconColor: Colors.blue.shade600,
+                                        collapsedIconColor: Colors.blue.shade400,
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(color: Colors.blue.shade50.withOpacity(0.3), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20))),
+                                            padding: const EdgeInsets.all(12),
+                                            child: Column(
+                                              children: items.map<Widget>((tf) {
+                                                final String fNom = formatRp(tf['nominal']);
+                                                return Container(
+                                                  margin: const EdgeInsets.only(bottom: 8),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.shade100)),
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Row(
+                                                              children: [
+                                                                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)), child: Text('TF', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.blue.shade800))),
+                                                                const SizedBox(width: 6),
+                                                                Text(tf['tgl_tf'] ?? '-', style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                                                              ],
+                                                            ),
+                                                            const SizedBox(height: 4),
+                                                            Text(fNom, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.blue.shade700)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      ElevatedButton.icon(
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors.blue.shade600, foregroundColor: Colors.white,
+                                                          elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                        ),
+                                                        onPressed: () => konfirmasiSelesaiTF(tf['id'], tf['nama'], fNom),
+                                                        icon: const Icon(Icons.check_rounded, size: 14),
+                                                        label: const Text('SELESAI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
                                         ],
                                       ),
-                                    ) 
+                                    ),
                                   );
                                 }).toList()
                               ),
