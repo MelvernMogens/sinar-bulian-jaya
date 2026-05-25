@@ -590,6 +590,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         case 'BB': return Colors.red.shade600;
         case 'TRANSFER': return Colors.blue.shade700;
         case 'AMPERA': return Colors.purple.shade700;
+        case 'KASBON': return Colors.indigo.shade700;
         default: return Colors.green.shade700; // CASH
       }
     }
@@ -599,6 +600,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         case 'BB': return Icons.warning_amber_rounded;
         case 'TRANSFER': return Icons.account_balance_rounded;
         case 'AMPERA': return Icons.swap_horiz_rounded;
+        case 'KASBON': return Icons.savings_rounded;
         default: return Icons.payments_rounded; // CASH
       }
     }
@@ -738,6 +740,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
                                           lunasVia != null && lunasVia.isNotEmpty ? 'DILUNASI via $lunasVia' : 'DILUNASI',
                                           style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.green.shade900),
                                         ),
+                                      ),
+                                    ] else if (p['metode'] == 'KASBON') ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.indigo.shade100, borderRadius: BorderRadius.circular(4)),
+                                        child: Text('POTONG UTANG', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.indigo.shade900)),
                                       ),
                                     ] else if (p['metode'] == 'TRANSFER' && !isLunas) ...[
                                       const SizedBox(width: 6),

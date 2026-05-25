@@ -611,13 +611,26 @@ def laporan_harian(request):
                     'is_lunas': is_lunas, 'lunas_via': None,
                 })
 
-        # Implied BB: porsi tanpa Pembayaran sama sekali → belum lunas
-        implied_bb = total_bersih_nota - total_explicit
-        if implied_bb > 0:
-            rows.append({
-                'metode': 'BB', 'nominal': implied_bb, 'pembayaran_id': None,
-                'is_lunas': False, 'lunas_via': None,
-            })
+        # Implied porsi (total nota - total Pembayaran).
+        # Ada 2 kemungkinan sumber gap:
+        #   1. Nota berstatus BB → gap = utang yang belum dibayar
+        #   2. Nota LUNAS → gap = setoran kasbon (potong dari utang petani)
+        implied_gap = total_bersih_nota - total_explicit
+        if implied_gap > 0:
+            if n.status_bayar == 'BB':
+                # Utang baru — tampil sebagai BB belum lunas
+                rows.append({
+                    'metode': 'BB', 'nominal': implied_gap, 'pembayaran_id': None,
+                    'is_lunas': False, 'lunas_via': None,
+                })
+            else:
+                # Nota LUNAS dengan gap = setoran kasbon. Tampilkan sebagai
+                # 'KASBON' (bukan BB) supaya owner ngerti porsi ini dibayar via
+                # potong utang yang sudah ada, bukan utang baru.
+                rows.append({
+                    'metode': 'KASBON', 'nominal': implied_gap, 'pembayaran_id': None,
+                    'is_lunas': True, 'lunas_via': 'KASBON',
+                })
 
         # Edge case fallback
         if len(rows) == 0:
