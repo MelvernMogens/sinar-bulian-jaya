@@ -295,6 +295,57 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
     );
   }
 
+  // Kartu Analisa Harga & DRC per LOT
+  Widget _buildAnalisaHargaCard() {
+    final double hargaJual = double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0;
+    final double modalGudang = double.tryParse('${data!['harga_modal_gudang'] ?? 0}') ?? 0;
+    final double modalPabrik = double.tryParse('${data!['harga_modal_pabrik'] ?? 0}') ?? 0;
+    final double drcGudang = double.tryParse('${data!['drc_gudang'] ?? 0}') ?? 0;
+    final double drcPabrik = double.tryParse('${data!['drc_pabrik'] ?? 0}') ?? 0;
+    final bool adaJual = hargaJual > 0;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(width: 4, height: 16, decoration: BoxDecoration(color: Colors.teal.shade700, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 8),
+            const Text('ANALISA HARGA & DRC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1.2)),
+          ]),
+          const SizedBox(height: 12),
+          _buildInfoRow('Harga Jual Dasar Pabrik', adaJual ? '${_formatUangAman(hargaJual)} /Kg' : 'Belum diisi', Icons.sell_rounded, valueColor: adaJual ? Colors.black87 : Colors.grey.shade400),
+          Divider(height: 16, color: Colors.grey.shade200),
+          _buildInfoRow('Harga Modal Gudang', modalGudang > 0 ? '${_formatUangAman(modalGudang)} /Kg' : '-', Icons.warehouse_rounded),
+          Divider(height: 16, color: Colors.grey.shade200),
+          _buildInfoRow('Harga Modal Pabrik', modalPabrik > 0 ? '${_formatUangAman(modalPabrik)} /Kg' : '-', Icons.factory_rounded),
+          Divider(height: 16, color: Colors.grey.shade200),
+          _buildInfoRow('DRC Gudang', (adaJual && drcGudang > 0) ? '${drcGudang.toStringAsFixed(2)}%' : '-', Icons.percent_rounded, valueColor: Colors.blue.shade700, iconColor: Colors.blue.shade700),
+          Divider(height: 16, color: Colors.grey.shade200),
+          _buildInfoRow('DRC Pabrik', (adaJual && drcPabrik > 0) ? '${drcPabrik.toStringAsFixed(2)}%' : '-', Icons.percent_rounded, valueColor: Colors.indigo.shade700, iconColor: Colors.indigo.shade700),
+          if (!adaJual) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.shade100)),
+              child: Row(children: [
+                Icon(Icons.info_outline_rounded, size: 14, color: Colors.amber.shade800),
+                const SizedBox(width: 6),
+                Expanded(child: Text('Isi "Harga Jual Dasar Pabrik" lewat Edit Info Lot buat lihat DRC.', style: TextStyle(fontSize: 11, color: Colors.amber.shade900, fontWeight: FontWeight.w600))),
+              ]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // Helper Widget Info Pabrik
   Widget _buildInfoRow(String label, String value, IconData icon, {Color? valueColor, Color? iconColor}) {
     return Padding(
@@ -405,13 +456,13 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                     children: [
                                       Row(
                                         children: [
-                                          const Text('MODAL ASLI / KG', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                          const Text('TIMBANGAN GUDANG', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
                                           const SizedBox(width: 6),
-                                          Icon(Icons.payments_rounded, color: Colors.amber.shade400, size: 14),
+                                          Icon(Icons.warehouse_rounded, color: Colors.teal.shade100, size: 14),
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      Text(_formatUangAman(data!['harga_modal']), style: TextStyle(color: Colors.amber.shade400, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                                      Text('${formatTonase(data!['total_tonase_gudang'])} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                                     ]
                                   ),
                                 ],
@@ -431,34 +482,18 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                     _buildInfoRow('No. VM', data!['vm'] ?? '-', Icons.confirmation_number_rounded),
                                     Divider(height: 16, color: Colors.grey.shade200),
                                     _buildPenyusutanRow(),
-                                    Divider(height: 16, color: Colors.grey.shade200),
-                                    _buildInfoRow(
-                                      'Harga Jual Dasar Pabrik',
-                                      (double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0 ? '${_formatUangAman(data!['harga_jual_pabrik'])} /Kg' : 'Belum diisi',
-                                      Icons.sell_rounded,
-                                      valueColor: (double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0 ? Colors.black87 : Colors.grey.shade400,
-                                    ),
-                                    if ((double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0) ...[
-                                      Divider(height: 16, color: Colors.grey.shade200),
-                                      Builder(builder: (_) {
-                                        final double untung = double.tryParse('${data!['untung_per_kg'] ?? 0}') ?? 0;
-                                        final bool plus = untung >= 0;
-                                        return _buildInfoRow(
-                                          'Estimasi Untung /Kg',
-                                          '${plus ? '+' : '-'}${_formatUangAman(untung.abs())} /Kg',
-                                          plus ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                                          valueColor: plus ? Colors.green.shade700 : Colors.red.shade600,
-                                          iconColor: plus ? Colors.green.shade700 : Colors.red.shade600,
-                                        );
-                                      }),
-                                    ],
                                   ],
                                 ),
                               )
                             ],
                           ),
                         ),
-                        
+
+                        const SizedBox(height: 20),
+
+                        // --- KARTU ANALISA HARGA & DRC ---
+                        _buildAnalisaHargaCard(),
+
                         const SizedBox(height: 36),
                         
                         // --- DAFTAR TRUK ---

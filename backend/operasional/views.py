@@ -1558,11 +1558,11 @@ def get_lot_detail(request, lot_id):
     try:
         lot = LotPabrik.objects.get(id=lot_id)
         pengirimans = Pengiriman.objects.filter(lot=lot).order_by('tanggal_kirim', 'tanggal')
-        items_data, t_uang_lot, t_tonase_pabrik_lot = [], Decimal('0'), Decimal('0')
+        items_data, t_uang_lot, t_tonase_pabrik_lot, t_tonase_gudang_lot = [], Decimal('0'), Decimal('0'), Decimal('0')
         t_gudang_ditimbang, t_pabrik_ditimbang = Decimal('0'), Decimal('0')  # cuma yang udah ada tonase pabrik
         for p in pengirimans:
             uang_g, ton_g, ton_p = sum([i.total_harga for i in p.items.all()]), sum([i.tonase for i in p.items.all()]), p.tonase_pabrik or Decimal('0')
-            t_uang_lot += uang_g; t_tonase_pabrik_lot += ton_p
+            t_uang_lot += uang_g; t_tonase_pabrik_lot += ton_p; t_tonase_gudang_lot += ton_g
             # Penyusutan per mobil (cuma kalau udah ditimbang di pabrik).
             # Konvensi: pabrik - gudang. Naik (pabrik > gudang) = plus, turun/susut = minus.
             penyusutan_kg, penyusutan_pct = None, None
@@ -1573,13 +1573,17 @@ def get_lot_detail(request, lot_id):
                 t_pabrik_ditimbang += ton_p
             tgl_efektif = p.tanggal_kirim or p.tanggal
             items_data.append({'pengiriman_id': p.id, 'tanggal': tgl_efektif.strftime('%Y-%m-%d'), 'plat_mobil': p.plat_mobil or p.nama_stock, 'total_tonase_gudang': float(ton_g), 'total_uang_gudang': float(uang_g), 'tonase_pabrik': float(ton_p), 'penyusutan_kg': penyusutan_kg, 'penyusutan_pct': penyusutan_pct})
-        harga_modal = float(t_uang_lot / t_tonase_pabrik_lot) if t_tonase_pabrik_lot > 0 else 0.0
+        # Harga modal: pabrik (pakai tonase pabrik) & gudang (pakai tonase gudang)
+        harga_modal_pabrik = float(t_uang_lot / t_tonase_pabrik_lot) if t_tonase_pabrik_lot > 0 else 0.0
+        harga_modal_gudang = float(t_uang_lot / t_tonase_gudang_lot) if t_tonase_gudang_lot > 0 else 0.0
         # Rata-rata penyusutan LOT (pabrik - gudang). Naik = plus, turun = minus.
         avg_penyusutan_pct = float((t_pabrik_ditimbang - t_gudang_ditimbang) / t_gudang_ditimbang * 100) if t_gudang_ditimbang > 0 else 0.0
         total_penyusutan_kg = float(t_pabrik_ditimbang - t_gudang_ditimbang)
         harga_jual_pabrik = float(lot.harga_jual_pabrik or 0)
-        untung_per_kg = (harga_jual_pabrik - harga_modal) if harga_jual_pabrik > 0 else 0.0
-        return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': lot.bl or '-', 'vm': lot.vm or '-', 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_tonase_gudang_ditimbang': float(t_gudang_ditimbang), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal, 'harga_jual_pabrik': harga_jual_pabrik, 'untung_per_kg': untung_per_kg, 'avg_penyusutan_pct': avg_penyusutan_pct, 'total_penyusutan_kg': total_penyusutan_kg, 'shipments': items_data})
+        # DRC = harga modal / harga jual dasar pabrik (persen). Butuh harga jual > 0.
+        drc_gudang = (harga_modal_gudang / harga_jual_pabrik * 100) if (harga_jual_pabrik > 0 and harga_modal_gudang > 0) else 0.0
+        drc_pabrik = (harga_modal_pabrik / harga_jual_pabrik * 100) if (harga_jual_pabrik > 0 and harga_modal_pabrik > 0) else 0.0
+        return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': lot.bl or '-', 'vm': lot.vm or '-', 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_tonase_gudang': float(t_tonase_gudang_lot), 'total_tonase_gudang_ditimbang': float(t_gudang_ditimbang), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal_pabrik, 'harga_modal_pabrik': harga_modal_pabrik, 'harga_modal_gudang': harga_modal_gudang, 'harga_jual_pabrik': harga_jual_pabrik, 'drc_gudang': drc_gudang, 'drc_pabrik': drc_pabrik, 'avg_penyusutan_pct': avg_penyusutan_pct, 'total_penyusutan_kg': total_penyusutan_kg, 'shipments': items_data})
     except LotPabrik.DoesNotExist: return JsonResponse({'status': 'error'}, status=404)
 
 @csrf_exempt
