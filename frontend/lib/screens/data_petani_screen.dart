@@ -366,18 +366,27 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
     }
   }
 
-  Widget _statBox(String label, String value, Color color, IconData icon) {
+  Widget _statBox(String label, String value, IconData icon, {bool highlight = false, Color accent = const Color(0xFF00897B)}) {
+    final valueColor = highlight ? accent : Colors.grey.shade800;
+    final iconColor = highlight ? accent : Colors.grey.shade400;
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.15))),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: highlight ? accent.withOpacity(0.35) : Colors.grey.shade200),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(height: 6),
-          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: color)),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+          Row(children: [
+            Icon(icon, size: 14, color: iconColor),
+            const SizedBox(width: 6),
+            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade500, fontWeight: FontWeight.w600))),
+          ]),
+          const SizedBox(height: 7),
+          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: valueColor))),
         ],
       ),
     );
@@ -433,14 +442,16 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
                   padding: const EdgeInsets.all(16),
                   child: GridView.count(
                     crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 2.6, crossAxisSpacing: 10, mainAxisSpacing: 10,
+                    childAspectRatio: 2.3, crossAxisSpacing: 12, mainAxisSpacing: 12,
                     children: [
-                      _statBox('Total Nilai Beli', formatRp(stats?['total_nilai'] ?? 0), Colors.teal.shade700, Icons.payments_rounded),
-                      _statBox('Rata Harga/Kg', formatRp(stats?['rata_harga_per_kg'] ?? 0), Colors.blue.shade700, Icons.trending_up_rounded),
-                      _statBox('BB Aktif', '${stats?['bb_aktif'] ?? 0} nota', Colors.red.shade700, Icons.warning_amber_rounded),
-                      _statBox('TF Pending', '${stats?['tf_pending'] ?? 0} transfer', Colors.orange.shade700, Icons.account_balance_rounded),
-                      _statBox('Total Setor', formatRp(stats?['total_setor'] ?? 0), Colors.green.shade700, Icons.savings_rounded),
-                      _statBox('Transaksi Terakhir', (stats?['transaksi_terakhir'] ?? '-').toString(), Colors.indigo.shade700, Icons.event_rounded),
+                      _statBox('Total Nilai Beli', formatRp(stats?['total_nilai'] ?? 0), Icons.payments_rounded),
+                      _statBox('Rata Harga/Kg', formatRp(stats?['rata_harga_per_kg'] ?? 0), Icons.trending_up_rounded),
+                      _statBox('BB Aktif', '${stats?['bb_aktif'] ?? 0} nota', Icons.warning_amber_rounded,
+                        highlight: (int.tryParse('${stats?['bb_aktif'] ?? 0}') ?? 0) > 0, accent: Colors.red.shade600),
+                      _statBox('TF Pending', '${stats?['tf_pending'] ?? 0} transfer', Icons.account_balance_rounded,
+                        highlight: (int.tryParse('${stats?['tf_pending'] ?? 0}') ?? 0) > 0, accent: Colors.orange.shade700),
+                      _statBox('Total Setor', formatRp(stats?['total_setor'] ?? 0), Icons.savings_rounded),
+                      _statBox('Transaksi Terakhir', (stats?['transaksi_terakhir'] ?? '-').toString(), Icons.event_rounded),
                     ],
                   ),
                 ),
