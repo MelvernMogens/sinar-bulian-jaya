@@ -284,18 +284,16 @@ class _DataPetaniScreenState extends State<DataPetaniScreen> {
                                           ],
                                         ),
                                       ),
-                                      PopupMenuButton<String>(
-                                        icon: Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey.shade500),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        onSelected: (v) {
-                                          if (v == 'edit') _dialogForm(existing: p);
-                                          else if (v == 'hapus') _konfirmasiHapus(p);
-                                        },
-                                        itemBuilder: (c) => [
-                                          PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, color: Colors.teal.shade700, size: 18), const SizedBox(width: 8), Text('Edit Info', style: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.w600, fontSize: 13))])),
-                                          PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red.shade600, size: 18), const SizedBox(width: 8), Text('Hapus', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 13))])),
-                                        ],
+                                      InkWell(
+                                        onTap: () => _konfirmasiHapus(p),
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
+                                          child: Icon(Icons.delete_outline_rounded, size: 20, color: Colors.red.shade600),
+                                        ),
                                       ),
+                                      const SizedBox(width: 4),
                                       Icon(Icons.chevron_right_rounded, size: 22, color: Colors.grey.shade300),
                                     ],
                                   ),
@@ -416,6 +414,7 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
                       Row(children: [
                         IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22), onPressed: () => Navigator.pop(context)),
                         Expanded(child: Text(info?['nama'] ?? widget.nama, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, overflow: TextOverflow.ellipsis))),
+                        IconButton(icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 20), tooltip: 'Edit Info Petani', onPressed: _dialogEditInfo),
                       ]),
                       const SizedBox(height: 8),
                       Padding(
@@ -511,6 +510,67 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
     );
   }
 
+  Future<void> _dialogEditInfo() async {
+    final namaCtrl = TextEditingController(text: (info?['nama'] ?? widget.nama).toString());
+    final telpCtrl = TextEditingController(text: (info?['no_telp'] ?? '').toString());
+    bool saving = false;
+    await showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (ctx, setD) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Edit Info Petani', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: namaCtrl, textCapitalization: TextCapitalization.words, decoration: InputDecoration(isDense: true, labelText: 'Nama Petani', prefixIcon: const Icon(Icons.person_rounded, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+            const SizedBox(height: 10),
+            TextField(controller: telpCtrl, keyboardType: TextInputType.phone, decoration: InputDecoration(isDense: true, labelText: 'No. Telepon (opsional)', prefixIcon: const Icon(Icons.phone_rounded, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+            const SizedBox(height: 6),
+            Text('Rekening dikelola di bagian "Rekening Bank" di bawah.', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade500, fontStyle: FontStyle.italic)),
+          ]),
+          actions: [
+            TextButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              onPressed: saving ? null : () async {
+                final nama = namaCtrl.text.trim();
+                if (nama.isEmpty) { showCustomSnackbar(context, 'Nama wajib diisi!', isError: true); return; }
+                setD(() => saving = true);
+                try {
+                  final prefs = await SharedPreferences.getInstance();
+                  final username = prefs.getString('username') ?? 'Sistem';
+                  final res = await http.post(
+                    Uri.parse('${AppConfig.baseUrl}/api/pelanggan/edit/'),
+                    headers: {'Content-Type': 'application/json'},
+                    body: json.encode({
+                      'pelanggan_id': widget.pelangganId,
+                      'nama': nama,
+                      'no_telp': telpCtrl.text.trim(),
+                      'no_rekening': (info?['no_rekening'] ?? '').toString(),
+                      'username': username,
+                    }),
+                  );
+                  final d = json.decode(res.body);
+                  if (res.statusCode == 200 && d['status'] == 'sukses') {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    await fetchProfil();
+                    if (mounted) showCustomSnackbar(context, 'Info petani diperbarui.');
+                  } else {
+                    setD(() => saving = false);
+                    if (mounted) showCustomSnackbar(context, d['pesan'] ?? 'Gagal memperbarui.', isError: true);
+                  }
+                } catch (_) {
+                  setD(() => saving = false);
+                  if (mounted) showCustomSnackbar(context, 'Gagal terhubung server!', isError: true);
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white, elevation: 0),
+              child: saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Simpan'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
   Widget _rekeningCard() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -590,7 +650,7 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
                 if (ok && ctx.mounted) { Navigator.pop(ctx); }
                 else { setD(() => saving = false); }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white, elevation: 0),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               child: saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Simpan'),
             ),
           ],

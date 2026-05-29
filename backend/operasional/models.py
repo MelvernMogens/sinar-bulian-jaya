@@ -164,9 +164,10 @@ class Pengiriman(models.Model):
     tipe = models.CharField(max_length=10, choices=TIPE_CHOICES)
     plat_mobil = models.CharField(max_length=20, null=True, blank=True)
     nama_stock = models.CharField(max_length=20, null=True, blank=True)
-    tanggal = models.DateField(auto_now_add=True)
+    tanggal = models.DateField(auto_now_add=True)  # tanggal dibuat (timbang)
+    tanggal_kirim = models.DateField(null=True, blank=True)  # tanggal saat difinalisasi/dikirim
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='DRAFT')
-    
+
     tonase_pabrik = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
     def __str__(self):

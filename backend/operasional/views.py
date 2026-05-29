@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_date
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.db import transaction
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
@@ -1445,6 +1445,8 @@ def finalisasi_pengiriman(request):
             if not plat_mobil: return JsonResponse({'status': 'gagal', 'pesan': 'Plat mobil wajib!'}, status=400)
             p.plat_mobil = plat_mobil.upper()
         p.status = 'TERKIRIM'
+        # Tanggal kirim = hari ini (saat difinalisasi), BUKAN tanggal dibuat
+        p.tanggal_kirim = timezone.now().date()
         if lot_id and str(lot_id).strip() not in ['', 'null', '0', 'None']:
             try: p.lot_id = int(lot_id)
             except ValueError: pass
@@ -1455,7 +1457,11 @@ def finalisasi_pengiriman(request):
 def laporan_pengiriman(request):
     tanggal_str = request.GET.get('tanggal')
     tanggal = parse_date(tanggal_str) if tanggal_str else timezone.now().date()
-    terkirim_qs = Pengiriman.objects.filter(tanggal=tanggal, status='TERKIRIM').order_by('-id')
+    # TERKIRIM tampil di tanggal DIKIRIM (tanggal_kirim). Legacy yang belum punya
+    # tanggal_kirim -> fallback ke tanggal dibuat.
+    terkirim_qs = Pengiriman.objects.filter(status='TERKIRIM').filter(
+        Q(tanggal_kirim=tanggal) | Q(tanggal_kirim__isnull=True, tanggal=tanggal)
+    ).order_by('-id')
     stock_qs = Pengiriman.objects.filter(tipe='STOCK', status='DRAFT').order_by('-id')
     def serialize_pengiriman(qs):
         data = []
@@ -1463,8 +1469,9 @@ def laporan_pengiriman(request):
             items = p.items.all()
             t_tonase = sum([i.tonase for i in items]) if items else Decimal('0')
             t_uang = sum([i.total_harga for i in items]) if items else Decimal('0')
+            tgl_efektif = p.tanggal_kirim or p.tanggal
             detail_items = [{'id': i.id, 'nama': i.nama_tujuan, 'no_telp': (i.pelanggan.no_telp if i.pelanggan else '') or '', 'no_rekening': (i.pelanggan.no_rekening if i.pelanggan else '') or '', 'tonase': float(i.tonase), 'harga': float(i.harga_input), 'harga_jual': float(i.harga_jual), 'total': float(i.total_harga)} for i in items]
-            data.append({'id': p.id, 'tipe': p.tipe, 'judul': p.plat_mobil if p.tipe == 'KIRIM' else p.nama_stock, 'tanggal': p.tanggal.strftime('%d-%m-%Y'), 'total_tonase': float(t_tonase), 'total_uang': float(t_uang), 'items': detail_items, 'nama_lot': p.lot.nama_lot if p.lot else '-', 'lot_id': p.lot_id})
+            data.append({'id': p.id, 'tipe': p.tipe, 'judul': p.plat_mobil if p.tipe == 'KIRIM' else p.nama_stock, 'tanggal': tgl_efektif.strftime('%d-%m-%Y'), 'total_tonase': float(t_tonase), 'total_uang': float(t_uang), 'items': detail_items, 'nama_lot': p.lot.nama_lot if p.lot else '-', 'lot_id': p.lot_id})
         return data
     return JsonResponse({'terkirim': serialize_pengiriman(terkirim_qs), 'stock_aktif': serialize_pengiriman(stock_qs)})
 
@@ -1480,11 +1487,18 @@ def get_lots(request):
     for l in lots:
         pengirimans = Pengiriman.objects.filter(lot=l)
         t_uang, t_tonase_pabrik = Decimal('0'), Decimal('0')
+        t_gudang_ditimbang, t_pabrik_ditimbang = Decimal('0'), Decimal('0')
         for p in pengirimans:
-            t_tonase_pabrik += (p.tonase_pabrik or Decimal('0'))
+            ton_p = (p.tonase_pabrik or Decimal('0'))
+            ton_g = sum([i.tonase for i in p.items.all()])
+            t_tonase_pabrik += ton_p
             for item in p.items.all(): t_uang += item.total_harga
+            if ton_p > 0 and ton_g > 0:
+                t_gudang_ditimbang += ton_g
+                t_pabrik_ditimbang += ton_p
         harga_modal = float(t_uang / t_tonase_pabrik) if t_tonase_pabrik > 0 else 0.0
-        data.append({'id': l.id, 'nama_lot': l.nama_lot, 'tanggal': l.tanggal_buat.strftime('%Y-%m-%d'), 'pabrik': l.pabrik or '-', 'total_uang_gudang': float(t_uang), 'total_tonase_pabrik': float(t_tonase_pabrik), 'harga_modal': harga_modal, 'is_selesai': l.is_selesai, 'jumlah_truk': pengirimans.count()})
+        avg_penyusutan_pct = float((t_gudang_ditimbang - t_pabrik_ditimbang) / t_gudang_ditimbang * 100) if t_gudang_ditimbang > 0 else 0.0
+        data.append({'id': l.id, 'nama_lot': l.nama_lot, 'tanggal': l.tanggal_buat.strftime('%Y-%m-%d'), 'pabrik': l.pabrik or '-', 'total_uang_gudang': float(t_uang), 'total_tonase_pabrik': float(t_tonase_pabrik), 'harga_modal': harga_modal, 'avg_penyusutan_pct': avg_penyusutan_pct, 'is_selesai': l.is_selesai, 'jumlah_truk': pengirimans.count()})
     return JsonResponse(data, safe=False)
 
 @csrf_exempt
@@ -1535,14 +1549,26 @@ def hapus_lot(request):
 def get_lot_detail(request, lot_id):
     try:
         lot = LotPabrik.objects.get(id=lot_id)
-        pengirimans = Pengiriman.objects.filter(lot=lot).order_by('tanggal')
+        pengirimans = Pengiriman.objects.filter(lot=lot).order_by('tanggal_kirim', 'tanggal')
         items_data, t_uang_lot, t_tonase_pabrik_lot = [], Decimal('0'), Decimal('0')
+        t_gudang_ditimbang, t_pabrik_ditimbang = Decimal('0'), Decimal('0')  # cuma yang udah ada tonase pabrik
         for p in pengirimans:
             uang_g, ton_g, ton_p = sum([i.total_harga for i in p.items.all()]), sum([i.tonase for i in p.items.all()]), p.tonase_pabrik or Decimal('0')
             t_uang_lot += uang_g; t_tonase_pabrik_lot += ton_p
-            items_data.append({'pengiriman_id': p.id, 'tanggal': p.tanggal.strftime('%Y-%m-%d'), 'plat_mobil': p.plat_mobil or p.nama_stock, 'total_tonase_gudang': float(ton_g), 'total_uang_gudang': float(uang_g), 'tonase_pabrik': float(ton_p)})
+            # Penyusutan per mobil (cuma kalau udah ditimbang di pabrik)
+            penyusutan_kg, penyusutan_pct = None, None
+            if ton_p > 0 and ton_g > 0:
+                penyusutan_kg = float(ton_g - ton_p)
+                penyusutan_pct = float((ton_g - ton_p) / ton_g * 100)
+                t_gudang_ditimbang += ton_g
+                t_pabrik_ditimbang += ton_p
+            tgl_efektif = p.tanggal_kirim or p.tanggal
+            items_data.append({'pengiriman_id': p.id, 'tanggal': tgl_efektif.strftime('%Y-%m-%d'), 'plat_mobil': p.plat_mobil or p.nama_stock, 'total_tonase_gudang': float(ton_g), 'total_uang_gudang': float(uang_g), 'tonase_pabrik': float(ton_p), 'penyusutan_kg': penyusutan_kg, 'penyusutan_pct': penyusutan_pct})
         harga_modal = float(t_uang_lot / t_tonase_pabrik_lot) if t_tonase_pabrik_lot > 0 else 0.0
-        return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': lot.bl or '-', 'vm': lot.vm or '-', 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal, 'shipments': items_data})
+        # Rata-rata penyusutan LOT = total susut / total gudang (yang udah ditimbang pabrik)
+        avg_penyusutan_pct = float((t_gudang_ditimbang - t_pabrik_ditimbang) / t_gudang_ditimbang * 100) if t_gudang_ditimbang > 0 else 0.0
+        total_penyusutan_kg = float(t_gudang_ditimbang - t_pabrik_ditimbang)
+        return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': lot.bl or '-', 'vm': lot.vm or '-', 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_tonase_gudang_ditimbang': float(t_gudang_ditimbang), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal, 'avg_penyusutan_pct': avg_penyusutan_pct, 'total_penyusutan_kg': total_penyusutan_kg, 'shipments': items_data})
     except LotPabrik.DoesNotExist: return JsonResponse({'status': 'error'}, status=404)
 
 @csrf_exempt

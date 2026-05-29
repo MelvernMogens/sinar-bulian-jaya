@@ -263,6 +263,27 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
     return formatRp(parsed);
   }
 
+  // Rata-rata penyusutan LOT (value warna oranye karena ini "kehilangan")
+  Widget _buildPenyusutanRow() {
+    final double pct = double.tryParse('${data!['avg_penyusutan_pct'] ?? 0}') ?? 0;
+    final double kg = double.tryParse('${data!['total_penyusutan_kg'] ?? 0}') ?? 0;
+    final bool ada = pct != 0 || kg != 0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.trending_down_rounded, size: 16, color: Colors.orange.shade700),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Rata-rata Penyusutan', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w600))),
+          Text(
+            ada ? '${pct.toStringAsFixed(2)}%  (${kg.toStringAsFixed(0)} Kg)' : 'Belum ditimbang',
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: ada ? Colors.orange.shade800 : Colors.grey.shade400),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Helper Widget Info Pabrik
   Widget _buildInfoRow(String label, String value, IconData icon) {
     return Padding(
@@ -397,6 +418,8 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                     _buildInfoRow('No. BL', data!['bl'] ?? '-', Icons.receipt_long_rounded),
                                     Divider(height: 16, color: Colors.grey.shade200),
                                     _buildInfoRow('No. VM', data!['vm'] ?? '-', Icons.confirmation_number_rounded),
+                                    Divider(height: 16, color: Colors.grey.shade200),
+                                    _buildPenyusutanRow(),
                                   ],
                                 ),
                               )
@@ -514,7 +537,30 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                               ],
                                             ),
                                           ],
-                                        )
+                                        ),
+                                        // --- PENYUSUTAN PER MOBIL ---
+                                        if (!belumTimbang) ...[
+                                          const SizedBox(height: 12),
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.orange.shade50,
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: Colors.orange.shade100),
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.trending_down_rounded, size: 14, color: Colors.orange.shade800),
+                                                const SizedBox(width: 6),
+                                                Text('Penyusutan: ', style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w700)),
+                                                Text('${(double.tryParse('${s['penyusutan_pct'] ?? 0}') ?? 0).toStringAsFixed(2)}%', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w900)),
+                                                Text('  (${(double.tryParse('${s['penyusutan_kg'] ?? 0}') ?? 0).toStringAsFixed(0)} Kg)', style: TextStyle(fontSize: 11, color: Colors.orange.shade800, fontWeight: FontWeight.w600)),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),

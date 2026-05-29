@@ -66,8 +66,7 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
         final data = json.decode(res.body);
         setState(() {
           rekening = data['rekening'] ?? [];
-          // auto-select kalau cuma 1 rekening
-          if (rekening.length == 1) selectedIdx = 0;
+          if (rekening.length == 1) selectedIdx = 0; // auto-select kalau cuma 1
         });
       }
     } catch (_) {
@@ -97,7 +96,6 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
         atasNamaCtrl.clear();
         showFormTambah = false;
         await fetchRekening();
-        // auto-select rekening yang baru ditambah
         final newIdx = rekening.indexWhere((r) => r['id'] == data['id']);
         setState(() => selectedIdx = newIdx >= 0 ? newIdx : selectedIdx);
       } else {
@@ -116,26 +114,41 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
     return nama.isEmpty ? nomor : '$nama  •  $nomor';
   }
 
+  // Input bergaya app (kotak abu-abu rounded) — biar serasi sama dialog lain
+  Widget _input({required TextEditingController controller, required String hint, TextInputType type = TextInputType.text, TextCapitalization cap = TextCapitalization.none, IconData? icon}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+      child: TextField(
+        controller: controller,
+        keyboardType: type,
+        textCapitalization: cap,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        decoration: InputDecoration(
+          labelText: hint,
+          labelStyle: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.normal, fontSize: 13),
+          prefixIcon: icon != null ? Icon(icon, size: 18, color: Colors.grey.shade400) : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final Color teal = Colors.teal.shade700;
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      title: Row(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 6),
+      contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.account_balance_rounded, color: Colors.blue.shade700, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Rekening Transfer', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-              Text(widget.namaPetani, style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-            ]),
-          ),
+          const Text('Rekening Transfer', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87)),
+          const SizedBox(height: 2),
+          Text(widget.namaPetani, style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ),
       content: SizedBox(
@@ -143,14 +156,15 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
         child: isLoading
             ? const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
             : SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (rekening.isEmpty && !showFormTambah)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Text('Belum ada rekening tersimpan.', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontStyle: FontStyle.italic)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text('Belum ada rekening tersimpan.', style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5, fontStyle: FontStyle.italic)),
                       ),
                     // List rekening
                     ...rekening.asMap().entries.map((e) {
@@ -159,19 +173,19 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
                       final bool sel = selectedIdx == i;
                       return InkWell(
                         onTap: () => setState(() => selectedIdx = i),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         child: Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
-                            color: sel ? Colors.blue.shade50 : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: sel ? Colors.blue.shade400 : Colors.grey.shade300, width: sel ? 1.5 : 1),
+                            color: sel ? teal.withOpacity(0.08) : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: sel ? teal : Colors.grey.shade200, width: sel ? 1.5 : 1),
                           ),
                           child: Row(children: [
-                            Icon(sel ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded, size: 18, color: sel ? Colors.blue.shade700 : Colors.grey.shade400),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(_labelRek(r), style: TextStyle(fontSize: 13, fontWeight: sel ? FontWeight.w800 : FontWeight.w600, color: Colors.black87))),
+                            Icon(sel ? Icons.check_circle_rounded : Icons.circle_outlined, size: 20, color: sel ? teal : Colors.grey.shade400),
+                            const SizedBox(width: 12),
+                            Expanded(child: Text(_labelRek(r), style: TextStyle(fontSize: 13.5, fontWeight: sel ? FontWeight.w900 : FontWeight.w600, color: Colors.black87))),
                           ]),
                         ),
                       );
@@ -179,62 +193,43 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
                     // Opsi: rekening belum ada
                     InkWell(
                       onTap: () => setState(() => selectedIdx = -2),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       child: Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: selectedIdx == -2 ? Colors.orange.shade50 : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selectedIdx == -2 ? Colors.orange.shade400 : Colors.grey.shade300, width: selectedIdx == -2 ? 1.5 : 1),
+                          color: selectedIdx == -2 ? Colors.orange.shade50 : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: selectedIdx == -2 ? Colors.orange.shade400 : Colors.grey.shade200, width: selectedIdx == -2 ? 1.5 : 1),
                         ),
                         child: Row(children: [
-                          Icon(selectedIdx == -2 ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded, size: 18, color: selectedIdx == -2 ? Colors.orange.shade700 : Colors.grey.shade400),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text('Rekening belum ada', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.orange.shade900))),
+                          Icon(selectedIdx == -2 ? Icons.check_circle_rounded : Icons.circle_outlined, size: 20, color: selectedIdx == -2 ? Colors.orange.shade700 : Colors.grey.shade400),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text('Rekening belum ada', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: selectedIdx == -2 ? Colors.orange.shade900 : Colors.black54))),
                         ]),
                       ),
                     ),
-                    const SizedBox(height: 4),
                     // Form tambah rekening (toggle)
                     if (showFormTambah) ...[
-                      const Divider(height: 18),
-                      TextField(
-                        controller: nomorCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          labelText: 'Nomor Rekening',
-                          prefixIcon: const Icon(Icons.tag_rounded, size: 18),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: atasNamaCtrl,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          labelText: 'Atas Nama (opsional)',
-                          prefixIcon: const Icon(Icons.person_rounded, size: 18),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
+                      Divider(height: 1, color: Colors.grey.shade200),
+                      const SizedBox(height: 12),
+                      _input(controller: nomorCtrl, hint: 'Nomor Rekening', type: TextInputType.number, icon: Icons.tag_rounded),
+                      _input(controller: atasNamaCtrl, hint: 'Atas Nama (opsional)', cap: TextCapitalization.words, icon: Icons.person_rounded),
                       Row(children: [
                         Expanded(
                           child: TextButton(
                             onPressed: isSaving ? null : () => setState(() { showFormTambah = false; nomorCtrl.clear(); atasNamaCtrl.clear(); }),
-                            child: const Text('Tutup'),
+                            child: Text('Tutup', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
                           ),
                         ),
                         Expanded(
                           child: ElevatedButton(
                             onPressed: isSaving ? null : simpanRekeningBaru,
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white, elevation: 0),
+                            style: ElevatedButton.styleFrom(backgroundColor: teal, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                             child: isSaving
                                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text('Simpan'),
+                                : const Text('Simpan', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ]),
@@ -244,20 +239,19 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
                         child: TextButton.icon(
                           onPressed: () => setState(() => showFormTambah = true),
                           icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                          label: const Text('Tambah Rekening Baru'),
-                          style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700),
+                          label: const Text('Tambah Rekening Baru', style: TextStyle(fontWeight: FontWeight.bold)),
+                          style: TextButton.styleFrom(foregroundColor: teal),
                         ),
                       ),
                   ],
                 ),
               ),
       ),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, null),
-          style: TextButton.styleFrom(foregroundColor: Colors.grey.shade700),
-          child: const Text('Batal'),
+          child: Text('Batal', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
         ),
         ElevatedButton(
           onPressed: () {
@@ -273,7 +267,7 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
               showCustomSnackbar(context, 'Pilih rekening dulu atau "Rekening belum ada".', isError: true);
             }
           },
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          style: ElevatedButton.styleFrom(backgroundColor: teal, foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
           child: const Text('Pilih', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
