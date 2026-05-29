@@ -1447,7 +1447,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       const SizedBox(height: 4), 
                       Text(formatRp(totalKasKeluarLaporan), style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.5)), 
                       const SizedBox(height: 8), 
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.teal.shade100)), child: Text("Tonase: ${totalKg.toStringAsFixed(0)} Kg", style: TextStyle(color: Colors.teal.shade800, fontSize: 11, fontWeight: FontWeight.bold)))
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.teal.shade100)), child: Text("Tonase: ${formatTonase(totalKg)} Kg", style: TextStyle(color: Colors.teal.shade800, fontSize: 11, fontWeight: FontWeight.bold)))
                     ]
                   )
                 ]

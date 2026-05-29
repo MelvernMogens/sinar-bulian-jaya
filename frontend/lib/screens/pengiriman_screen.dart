@@ -934,7 +934,7 @@ class _DetailPengirimanScreenState extends State<DetailPengirimanScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Text('${data!['total_tonase']} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                                Text('${formatTonase(data!['total_tonase'])} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                               ]
                             ),
                             Container(width: 1, height: 40, color: Colors.white.withOpacity(0.2)),
@@ -989,7 +989,7 @@ class _DetailPengirimanScreenState extends State<DetailPengirimanScreen> {
                                             children: [
                                               Text(it['nama_tujuan'], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black87)),
                                               const SizedBox(height: 2),
-                                              Text('T: ${it['tonase']} kg • Jual: ${formatRp(it['harga_jual'])}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                                              Text('T: ${formatTonase(it['tonase'])} kg • Jual: ${formatRp(it['harga_jual'])}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
                                             ],
                                           ),
                                         ),

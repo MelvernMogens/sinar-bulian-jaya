@@ -292,24 +292,6 @@ class _LaporanTonasePabrikScreenState extends State<LaporanTonasePabrikScreen> {
                                                   _buildColumnStats('Timbangan', '${formatTonase(l['total_tonase_pabrik'] ?? 0)} Kg'),
                                                 ],
                                               ),
-                                              const SizedBox(height: 12),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                                decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.shade100)),
-                                                child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                  children: [
-                                                    Row(
-                                                      children: [
-                                                        Icon(Icons.payments_rounded, size: 16, color: Colors.amber.shade800),
-                                                        const SizedBox(width: 6),
-                                                        Text('Modal Pabrik/Kg', style: TextStyle(color: Colors.amber.shade900, fontSize: 12, fontWeight: FontWeight.w600)),
-                                                      ],
-                                                    ),
-                                                    Text(formatRp(l['harga_modal'] ?? 0), style: TextStyle(color: Colors.amber.shade900, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                                                  ],
-                                                ),
-                                              )
                                             ],
                                           ),
                                         ),

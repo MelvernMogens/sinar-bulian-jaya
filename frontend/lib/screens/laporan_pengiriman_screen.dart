@@ -359,7 +359,7 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                       Row(
                         children: [
                           IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87, size: 22), onPressed: () => Navigator.pop(context)),
-                          const Text('Laporan Harian', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: -0.5)),
+                          const Text('Laporan Pengiriman', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: -0.5)),
                         ],
                       ),
                       InkWell(
