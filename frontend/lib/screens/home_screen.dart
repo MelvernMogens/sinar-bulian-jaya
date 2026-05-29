@@ -10,6 +10,7 @@ import 'pembelian_screen.dart';
 import 'keuangan_screen.dart';
 import 'kasbon_screen.dart';
 import 'pengeluaran_screen.dart';
+import 'data_petani_screen.dart';
 import 'laporan_screen.dart';
 import 'pengiriman_screen.dart';
 import 'laporan_pengiriman_screen.dart';
@@ -297,6 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _buildUniqueMenu(context, 'Keuangan & Saldo', Icons.account_balance_wallet, Colors.teal, const KeuanganScreen()),
                       _buildUniqueMenu(context, 'Buku Kasbon Petani', Icons.book_online, Colors.redAccent, const MenuKasbonScreen()),
                       _buildUniqueMenu(context, 'Catat Pengeluaran', Icons.receipt_long_rounded, Colors.orange.shade800, CatatPengeluaranScreen(tonaseHarian: tonaseHariIni)),
+                      _buildUniqueMenu(context, 'Data Petani', Icons.groups_rounded, Colors.green.shade700, const DataPetaniScreen()),
 
                       const SizedBox(height: 24),
                       const Text('LAPORAN', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black26, fontSize: 11, letterSpacing: 1.2)),
