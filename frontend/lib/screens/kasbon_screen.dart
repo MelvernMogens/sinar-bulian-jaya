@@ -409,39 +409,6 @@ class _MenuKasbonScreenState extends State<MenuKasbonScreen> {
                                           ],
                                         ),
                                       ),
-                                      PopupMenuButton<String>(
-                                        icon: Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey.shade500),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        onSelected: (value) {
-                                          if (value == 'edit') {
-                                            _dialogFormPetani(existing: p);
-                                          } else if (value == 'hapus') {
-                                            _konfirmasiHapusPelanggan(p['id'], p['nama'], kasbon);
-                                          }
-                                        },
-                                        itemBuilder: (ctx) => [
-                                          PopupMenuItem(
-                                            value: 'edit',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.edit_rounded, color: Colors.teal.shade700, size: 18),
-                                                const SizedBox(width: 8),
-                                                Text('Edit Info Petani', style: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.w600, fontSize: 13)),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'hapus',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.delete_outline_rounded, color: Colors.red.shade600, size: 18),
-                                                const SizedBox(width: 8),
-                                                Text('Hapus Petani', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600, fontSize: 13)),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
                                       Icon(Icons.chevron_right_rounded, size: 24, color: Colors.grey.shade300),
                                     ],
                                   ),
