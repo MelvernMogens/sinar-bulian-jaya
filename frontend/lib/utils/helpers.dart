@@ -30,6 +30,23 @@ String formatRibuan(dynamic number) {
   return isNegative ? '-$result' : result;
 }
 
+// Format tonase/Kg: pemisah ribuan (titik) + desimal pakai koma HANYA kalau ada.
+// Contoh: 1000.0 -> "1.000", 1234.5 -> "1.234,5", 12500.25 -> "12.500,25"
+String formatTonase(dynamic number) {
+  double value = double.tryParse(number.toString()) ?? 0;
+  bool isNegative = value < 0;
+  double absVal = value.abs();
+  double rounded = (absVal * 100).roundToDouble() / 100;
+  int intPart = rounded.floor();
+  int fracInt = ((rounded - intPart) * 100).round(); // 0..99
+  String result = formatRibuan(intPart);
+  if (fracInt > 0) {
+    String f = fracInt.toString().padLeft(2, '0').replaceAll(RegExp(r'0+$'), '');
+    result = '$result,$f';
+  }
+  return isNegative ? '-$result' : result;
+}
+
 void showCustomSnackbar(BuildContext context, String message, {bool isError = false}) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(

@@ -289,7 +289,7 @@ class _LaporanTonasePabrikScreenState extends State<LaporanTonasePabrikScreen> {
                                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                 children: [
                                                   _buildColumnStats('Total Gudang', formatRp(l['total_uang_gudang'] ?? 0)),
-                                                  _buildColumnStats('Timbangan', '${l['total_tonase_pabrik'] ?? 0} Kg'),
+                                                  _buildColumnStats('Timbangan', '${formatTonase(l['total_tonase_pabrik'] ?? 0)} Kg'),
                                                 ],
                                               ),
                                               const SizedBox(height: 12),

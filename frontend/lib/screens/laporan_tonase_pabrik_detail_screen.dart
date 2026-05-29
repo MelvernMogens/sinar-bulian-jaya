@@ -276,7 +276,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
           const SizedBox(width: 8),
           Expanded(child: Text('Rata-rata Penyusutan', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w600))),
           Text(
-            ada ? '${pct.toStringAsFixed(2)}%  (${kg.toStringAsFixed(0)} Kg)' : 'Belum ditimbang',
+            ada ? '${pct.toStringAsFixed(2)}%  (${formatTonase(kg)} Kg)' : 'Belum ditimbang',
             style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: ada ? Colors.orange.shade800 : Colors.grey.shade400),
           ),
         ],
@@ -385,7 +385,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      Text('${data!['total_tonase_pabrik']} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                                      Text('${formatTonase(data!['total_tonase_pabrik'])} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                                     ]
                                   ),
                                   Container(width: 1, height: 40, color: Colors.white.withOpacity(0.2)), // Pembatas
@@ -520,7 +520,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                               children: [
                                                 const Text('Timbangan Gudang', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
                                                 const SizedBox(height: 4),
-                                                Text('${s['total_tonase_gudang']} Kg', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.black87)),
+                                                Text('${formatTonase(s['total_tonase_gudang'])} Kg', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.black87)),
                                                 Text(_formatUangAman(s['total_uang_gudang']), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
                                               ],
                                             ),
@@ -530,7 +530,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                                 const Text('Timbangan Pabrik', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  belumTimbang ? 'Belum Input' : '${s['tonase_pabrik']} Kg', 
+                                                  belumTimbang ? 'Belum Input' : '${formatTonase(s['tonase_pabrik'])} Kg',
                                                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: belumTimbang ? Colors.red.shade600 : Colors.amber.shade900)
                                                 ),
                                                 Text('Disimpan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: belumTimbang ? Colors.transparent : Colors.grey.shade500)),
@@ -556,7 +556,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                                 const SizedBox(width: 6),
                                                 Text('Penyusutan: ', style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w700)),
                                                 Text('${(double.tryParse('${s['penyusutan_pct'] ?? 0}') ?? 0).toStringAsFixed(2)}%', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w900)),
-                                                Text('  (${(double.tryParse('${s['penyusutan_kg'] ?? 0}') ?? 0).toStringAsFixed(0)} Kg)', style: TextStyle(fontSize: 11, color: Colors.orange.shade800, fontWeight: FontWeight.w600)),
+                                                Text('  (${formatTonase(s['penyusutan_kg'] ?? 0)} Kg)', style: TextStyle(fontSize: 11, color: Colors.orange.shade800, fontWeight: FontWeight.w600)),
                                               ],
                                             ),
                                           ),
