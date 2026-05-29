@@ -525,18 +525,17 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   double harga = double.tryParse(t['harga_per_kg'].toString()) ?? 0;
                   double totalBersihApi = double.tryParse(t['total_bersih'].toString()) ?? 0;
                   
+                  final bool pakaiKomisi = t['pakai_komisi'] ?? true;
+                  final bool pakaiBuruh = t['pakai_buruh'] ?? true;
+                  final bool pakaiMaterai = t['pakai_materai'] ?? true;
                   double kotor = berat * harga;
-                  double komisi = (kotor * 0.01 / 1000).ceil() * 1000.0;
-                  double buruh = (berat * 35 / 1000).ceil() * 1000.0;
-                  double materai = 6000;
-                  
+                  double komisi = pakaiKomisi ? (kotor * 0.01 / 1000).ceil() * 1000.0 : 0;
+                  double buruh = pakaiBuruh ? (berat * 35 / 1000).ceil() * 1000.0 : 0;
+                  double materai = pakaiMaterai ? 6000 : 0;
+
                   double sisaSebelumKasbon = kotor - komisi - buruh - materai;
                   double kasbon = 0;
-                  
-                  if (totalBersihApi > sisaSebelumKasbon) {
-                      materai = 0; 
-                      sisaSebelumKasbon = kotor - komisi - buruh;
-                  }
+
                   if (sisaSebelumKasbon > totalBersihApi) {
                       kasbon = sisaSebelumKasbon - totalBersihApi;
                   }
@@ -757,17 +756,18 @@ class _LaporanScreenState extends State<LaporanScreen> {
     final bool hasBBLunas = payments.any((p) => p['metode'] == 'BB' && p['is_lunas'] == true);
     final Color headerColor = hasUnpaidBB ? Colors.red.shade600 : (hasBBLunas ? Colors.green.shade700 : Colors.teal.shade700);
 
-    // Breakdown nota (komisi/buruh/materai/kasbon) — pakai total NOTA UTUH
+    // Breakdown nota (komisi/buruh/materai/kasbon) — pakai total NOTA UTUH.
+    // Hormati flag pakai_* dari backend: kalau toggle off saat buat nota,
+    // potongannya MEMANG nol (jangan dihitung ulang seolah-olah aktif).
+    final bool pakaiKomisi = g['pakai_komisi'] ?? true;
+    final bool pakaiBuruh = g['pakai_buruh'] ?? true;
+    final bool pakaiMaterai = g['pakai_materai'] ?? true;
     double kotor = berat * harga;
-    double komisi = (kotor * 0.01 / 1000).ceil() * 1000.0;
-    double buruh = (berat * 35 / 1000).ceil() * 1000.0;
-    double materai = 6000;
+    double komisi = pakaiKomisi ? (kotor * 0.01 / 1000).ceil() * 1000.0 : 0;
+    double buruh = pakaiBuruh ? (berat * 35 / 1000).ceil() * 1000.0 : 0;
+    double materai = pakaiMaterai ? 6000 : 0;
     double sisaSebelumKasbon = kotor - komisi - buruh - materai;
     double kasbon = 0;
-    if (totalNotaFull > sisaSebelumKasbon) {
-      materai = 0;
-      sisaSebelumKasbon = kotor - komisi - buruh;
-    }
     if (sisaSebelumKasbon > totalNotaFull) {
       kasbon = sisaSebelumKasbon - totalNotaFull;
     }
@@ -1022,6 +1022,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
                             'berat_kg': berat,
                             'harga_per_kg': harga,
                             'total_bersih': totalNotaFull,
+                            'pakai_komisi': pakaiKomisi,
+                            'pakai_buruh': pakaiBuruh,
+                            'pakai_materai': pakaiMaterai,
                           }),
                         ),
                       )
@@ -1069,19 +1072,19 @@ class _LaporanScreenState extends State<LaporanScreen> {
     final int? splitTotal = t['split_total_parts'] is int ? t['split_total_parts'] as int : null;
     final double totalNotaFull = double.tryParse((t['total_nota_full'] ?? totalBersihApi).toString()) ?? totalBersihApi;
 
-    // Untuk kalkulasi breakdown (komisi/buruh/materai/kasbon), pakai total nota utuh — bukan nominal per bagian
+    // Untuk kalkulasi breakdown (komisi/buruh/materai/kasbon), pakai total nota utuh — bukan nominal per bagian.
+    // Hormati flag pakai_* dari backend (toggle off = potongan nol).
+    final bool pakaiKomisi = t['pakai_komisi'] ?? true;
+    final bool pakaiBuruh = t['pakai_buruh'] ?? true;
+    final bool pakaiMaterai = t['pakai_materai'] ?? true;
     double kotor = berat * harga;
-    double komisi = (kotor * 0.01 / 1000).ceil() * 1000.0;
-    double buruh = (berat * 35 / 1000).ceil() * 1000.0;
-    double materai = 6000;
+    double komisi = pakaiKomisi ? (kotor * 0.01 / 1000).ceil() * 1000.0 : 0;
+    double buruh = pakaiBuruh ? (berat * 35 / 1000).ceil() * 1000.0 : 0;
+    double materai = pakaiMaterai ? 6000 : 0;
 
     double sisaSebelumKasbon = kotor - komisi - buruh - materai;
     double kasbon = 0;
 
-    if (totalNotaFull > sisaSebelumKasbon) {
-        materai = 0;
-        sisaSebelumKasbon = kotor - komisi - buruh;
-    }
     if (sisaSebelumKasbon > totalNotaFull) {
         kasbon = sisaSebelumKasbon - totalNotaFull;
     }
@@ -1255,6 +1258,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
           'harga_per_kg': t['harga_per_kg'],
           'status_bayar': t['status_bayar'],
           'total_nota_full': t['total_nota_full'] ?? t['total_bersih'],
+          'pakai_komisi': t['pakai_komisi'] ?? true,
+          'pakai_buruh': t['pakai_buruh'] ?? true,
+          'pakai_materai': t['pakai_materai'] ?? true,
           'payments': <Map>[],
         };
       }
