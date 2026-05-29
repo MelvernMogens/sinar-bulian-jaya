@@ -500,6 +500,8 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                         Divider(height: 16, color: Colors.grey.shade200),
                                         _buildInfoRow('VM', (double.tryParse('${data!['vm'] ?? 0}') ?? 0) > 0 ? '${formatTonase(data!['vm'])}%' : '-', Icons.confirmation_number_rounded, valueColor: Colors.teal.shade800),
                                         Divider(height: 16, color: Colors.grey.shade200),
+                                        _buildInfoRow('DRC Actual', (double.tryParse('${data!['drc_actual'] ?? 0}') ?? 0) > 0 ? '${formatTonase(data!['drc_actual'])}%' : '-', Icons.science_rounded, valueColor: Colors.green.shade700, iconColor: Colors.green.shade700),
+                                        Divider(height: 16, color: Colors.grey.shade200),
                                         _buildPenyusutanRow(),
                                       ],
                                     ),
