@@ -624,6 +624,27 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
     );
   }
 
+  // Input bergaya app (kotak abu-abu rounded) biar dialog rekening serasi
+  Widget _rekInput({required TextEditingController controller, required String hint, TextInputType type = TextInputType.text, TextCapitalization cap = TextCapitalization.none, IconData? icon}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+      child: TextField(
+        controller: controller,
+        keyboardType: type,
+        textCapitalization: cap,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        decoration: InputDecoration(
+          labelText: hint,
+          labelStyle: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.normal, fontSize: 13),
+          prefixIcon: icon != null ? Icon(icon, size: 18, color: Colors.grey.shade400) : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
+    );
+  }
+
   Future<void> _dialogRekening({Map? existing}) async {
     final nomorCtrl = TextEditingController(text: existing?['nomor']?.toString() ?? '');
     final namaCtrl = TextEditingController(text: existing?['atas_nama']?.toString() ?? '');
@@ -632,15 +653,22 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
       context: context,
       builder: (_) => StatefulBuilder(builder: (ctx, setD) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: Text(existing == null ? 'Tambah Rekening' : 'Edit Rekening', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: nomorCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(isDense: true, labelText: 'Nomor Rekening', prefixIcon: const Icon(Icons.tag_rounded, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
-            const SizedBox(height: 10),
-            TextField(controller: namaCtrl, textCapitalization: TextCapitalization.words, decoration: InputDecoration(isDense: true, labelText: 'Atas Nama (opsional)', prefixIcon: const Icon(Icons.person_rounded, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 8),
+          contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+          title: Row(children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(10)), child: Icon(Icons.account_balance_rounded, color: Colors.teal.shade700, size: 18)),
+            const SizedBox(width: 10),
+            Text(existing == null ? 'Tambah Rekening' : 'Edit Rekening', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Colors.black87)),
           ]),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            _rekInput(controller: nomorCtrl, hint: 'Nomor Rekening', type: TextInputType.number, icon: Icons.tag_rounded),
+            _rekInput(controller: namaCtrl, hint: 'Atas Nama (opsional)', cap: TextCapitalization.words, icon: Icons.person_rounded),
+          ]),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           actions: [
-            TextButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+            TextButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: Text('Batal', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold))),
             ElevatedButton(
               onPressed: saving ? null : () async {
                 final nomor = nomorCtrl.text.trim();
@@ -650,8 +678,8 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
                 if (ok && ctx.mounted) { Navigator.pop(ctx); }
                 else { setD(() => saving = false); }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Simpan'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Simpan', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         );

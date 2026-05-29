@@ -153,8 +153,12 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
       ),
       content: SizedBox(
         width: double.maxFinite,
-        child: isLoading
-            ? const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: isLoading
+            ? const SizedBox(height: 130, child: Center(child: CircularProgressIndicator()))
             : SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Column(
@@ -246,6 +250,7 @@ class _RekeningPickerDialogState extends State<_RekeningPickerDialog> {
                   ],
                 ),
               ),
+          ),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       actions: [
