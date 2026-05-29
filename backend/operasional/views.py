@@ -12,7 +12,7 @@ from django.db.models import Sum
 from django.db import transaction
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import Pelanggan, Nota, KasGudang, BukuKasbon, Pembayaran, Pengeluaran, LotPabrik, Pengiriman, ItemPengiriman, UserProfile, LogAktivitas
+from .models import Pelanggan, Nota, KasGudang, BukuKasbon, Pembayaran, Pengeluaran, LotPabrik, Pengiriman, ItemPengiriman, UserProfile, LogAktivitas, RekeningPetani
 
 import firebase_admin
 from firebase_admin import credentials, messaging
@@ -213,6 +213,65 @@ def hapus_pelanggan(request):
     except Exception as e:
         return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
 
+# ====================== REKENING PETANI (multi) ======================
+def list_rekening(request, pelanggan_id):
+    """List semua rekening milik 1 petani."""
+    data = list(RekeningPetani.objects.filter(pelanggan_id=pelanggan_id).values('id', 'nomor', 'atas_nama').order_by('atas_nama', 'id'))
+    return JsonResponse({'status': 'sukses', 'rekening': data})
+
+@csrf_exempt
+def tambah_rekening(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        pelanggan = Pelanggan.objects.get(id=data.get('pelanggan_id'))
+        nomor = (data.get('nomor') or '').strip()
+        atas_nama = (data.get('atas_nama') or '').strip()
+        if not nomor:
+            return JsonResponse({'status': 'gagal', 'pesan': 'Nomor rekening wajib diisi.'}, status=400)
+        rek = RekeningPetani.objects.create(pelanggan=pelanggan, nomor=nomor, atas_nama=atas_nama)
+        return JsonResponse({'status': 'sukses', 'id': rek.id, 'nomor': rek.nomor, 'atas_nama': rek.atas_nama})
+    except Pelanggan.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Petani tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+@csrf_exempt
+def edit_rekening(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        rek = RekeningPetani.objects.get(id=data.get('rekening_id'))
+        nomor = (data.get('nomor') or '').strip()
+        atas_nama = (data.get('atas_nama') or '').strip()
+        if not nomor:
+            return JsonResponse({'status': 'gagal', 'pesan': 'Nomor rekening wajib diisi.'}, status=400)
+        rek.nomor = nomor
+        rek.atas_nama = atas_nama
+        rek.save()
+        return JsonResponse({'status': 'sukses'})
+    except RekeningPetani.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Rekening tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+@csrf_exempt
+def hapus_rekening(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        rek = RekeningPetani.objects.get(id=data.get('rekening_id'))
+        rek.delete()
+        return JsonResponse({'status': 'sukses'})
+    except RekeningPetani.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Rekening tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+
 @csrf_exempt
 def buat_nota(request):
     if request.method == 'POST':
@@ -220,6 +279,9 @@ def buat_nota(request):
             data = json.loads(request.body)
             pelanggan_id = data.get('pelanggan_id')
             tanggal_tf = data.get('tanggal_transfer')
+            # Rekening tujuan kalau ada porsi TF (dipilih lewat popup di app)
+            rekening_nomor_tf = (data.get('rekening_nomor') or '').strip() or None
+            rekening_atas_nama_tf = (data.get('rekening_atas_nama') or '').strip() or None
             setoran_pinjaman = Decimal(str(data.get('setoran_pinjaman', '0')))
             
             metode_bayar = data.get('metode_bayar', 'CASH')
@@ -393,10 +455,12 @@ def buat_nota(request):
                             metode='TRANSFER' if metode_bayar == 'TF' else metode_bayar, 
                             nominal=bayar_1_nota,
                             tanggal_bayar=parse_date(tanggal_tf) if (metode_bayar == 'TF' and tanggal_tf) else timezone.now().date(),
-                            keterangan='Pelunasan' if not is_split else f'Split 1 ({metode_bayar})', 
+                            keterangan='Pelunasan' if not is_split else f'Split 1 ({metode_bayar})',
                             is_setoran_pinjaman=True if potong_per_item[idx] > 0 else False,
                             # BB & TF belum lunas (BB = utang, TF = nunggu masuk rekening)
-                            is_selesai=False if metode_bayar in ('TF', 'BB') else True
+                            is_selesai=False if metode_bayar in ('TF', 'BB') else True,
+                            rekening_nomor=rekening_nomor_tf if metode_bayar == 'TF' else None,
+                            rekening_atas_nama=rekening_atas_nama_tf if metode_bayar == 'TF' else None,
                         )
 
                     if is_split and bayar_2_nota > 0:
@@ -411,7 +475,9 @@ def buat_nota(request):
                             keterangan=f'Split 2 ({metode_2})',
                             is_setoran_pinjaman=False,
                             # BB & TF belum lunas
-                            is_selesai=False if metode_2 in ('TF', 'BB') else True
+                            is_selesai=False if metode_2 in ('TF', 'BB') else True,
+                            rekening_nomor=rekening_nomor_tf if metode_2 == 'TF' else None,
+                            rekening_atas_nama=rekening_atas_nama_tf if metode_2 == 'TF' else None,
                         )
 
             return JsonResponse({'status': 'sukses', 'id_nota': first_nota_id})
@@ -564,6 +630,7 @@ def profil_petani(request, pelanggan_id):
         },
         'nota_history': nota_history,
         'kasbon_history': kasbon_history,
+        'rekening_list': list(RekeningPetani.objects.filter(pelanggan=p).values('id', 'nomor', 'atas_nama').order_by('atas_nama', 'id')),
     })
 
 
@@ -606,6 +673,7 @@ def list_tanggungan(request):
         nominal_bb = pemb_bb.nominal if pemb_bb else n.total_bersih
         data_bb.append({
             'id': n.id,
+            'pelanggan_id': n.pelanggan_id,
             'nama': n.pelanggan.nama,
             'no_telp': n.pelanggan.no_telp or '',
             'no_rekening': n.pelanggan.no_rekening or '',
@@ -616,9 +684,12 @@ def list_tanggungan(request):
     tf = Pembayaran.objects.filter(metode='TRANSFER', is_selesai=False).select_related('nota__pelanggan').order_by('tanggal_bayar')
     data_tf = [{
         'id': p.id,
+        'pelanggan_id': p.nota.pelanggan_id,
         'nama': p.nota.pelanggan.nama,
         'no_telp': p.nota.pelanggan.no_telp or '',
         'no_rekening': p.nota.pelanggan.no_rekening or '',
+        'rekening_nomor': p.rekening_nomor or '',
+        'rekening_atas_nama': p.rekening_atas_nama or '',
         'nominal': float(p.nominal),
         'tgl_tf': p.tanggal_bayar.strftime('%d-%m-%Y')
     } for p in tf]
@@ -639,6 +710,9 @@ def lunasin_bb(request):
             return JsonResponse({'status': 'sukses', 'pesan': 'Nota sudah lunas.', 'already_done': True})
 
         metode = data.get('metode', 'CASH')
+        # Rekening tujuan kalau dilunasi via TF (dipilih lewat popup)
+        rekening_nomor_tf = (data.get('rekening_nomor') or '').strip() or None
+        rekening_atas_nama_tf = (data.get('rekening_atas_nama') or '').strip() or None
 
         pemb_bb = Pembayaran.objects.filter(nota=nota, metode='BB').first()
         tagihan_akhir = pemb_bb.nominal if pemb_bb else nota.total_bersih
@@ -655,6 +729,9 @@ def lunasin_bb(request):
                 # di metadata baru kalau perlu di future. Simpan tanggal pelunasan ke now()
                 # tapi keep histori di nota.tanggal sebagai source of truth.
                 pemb_bb.tanggal_bayar = timezone.now().date()
+                if metode == 'TF':
+                    pemb_bb.rekening_nomor = rekening_nomor_tf
+                    pemb_bb.rekening_atas_nama = rekening_atas_nama_tf
                 pemb_bb.save()
 
             if metode == 'CASH':
@@ -731,12 +808,14 @@ def laporan_harian(request):
                 rows.append({
                     'metode': 'BB', 'nominal': nominal_p, 'pembayaran_id': p.id,
                     'is_lunas': True, 'lunas_via': p.metode,
+                    'rekening_nomor': p.rekening_nomor, 'rekening_atas_nama': p.rekening_atas_nama,
                 })
             elif p.keterangan == 'Pelunasan TF':
                 # TF asli yang sudah settle. Tampilkan TRANSFER + flag selesai.
                 rows.append({
                     'metode': p.metode, 'nominal': nominal_p, 'pembayaran_id': p.id,
                     'is_lunas': True, 'lunas_via': p.metode,
+                    'rekening_nomor': p.rekening_nomor, 'rekening_atas_nama': p.rekening_atas_nama,
                 })
             else:
                 # Pembayaran original (CASH/TRANSFER/AMPERA/BB literal).
@@ -750,6 +829,7 @@ def laporan_harian(request):
                 rows.append({
                     'metode': p.metode, 'nominal': nominal_p, 'pembayaran_id': p.id,
                     'is_lunas': is_lunas, 'lunas_via': None,
+                    'rekening_nomor': p.rekening_nomor, 'rekening_atas_nama': p.rekening_atas_nama,
                 })
 
         # Implied porsi (total nota - total Pembayaran).
@@ -797,6 +877,8 @@ def laporan_harian(request):
                 'total_nota_full': float(total_bersih_nota),
                 'metode': r['metode'],
                 'status_bayar': n.status_bayar,
+                'rekening_nomor': r.get('rekening_nomor'),
+                'rekening_atas_nama': r.get('rekening_atas_nama'),
                 'pakai_komisi': n.pakai_komisi,
                 'pakai_buruh': n.pakai_buruh,
                 'pakai_materai': n.pakai_materai,

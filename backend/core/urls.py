@@ -41,6 +41,10 @@ from operasional.views import (
     api_login,
     list_log_aktivitas,
     prediksi_harga_ai,
+    list_rekening,
+    tambah_rekening,
+    edit_rekening,
+    hapus_rekening,
 )
 
 urlpatterns = [
@@ -58,6 +62,10 @@ urlpatterns = [
     path('api/kasbon/transaksi/', transaksi_kasbon, name='transaksi_kasbon'),
     path('api/kasbon/history/<int:pelanggan_id>/', history_kasbon_pelanggan, name='history_kasbon_pelanggan'),
     path('api/petani/profil/<int:pelanggan_id>/', profil_petani, name='profil_petani'),
+    path('api/rekening/tambah/', tambah_rekening, name='tambah_rekening'),
+    path('api/rekening/edit/', edit_rekening, name='edit_rekening'),
+    path('api/rekening/hapus/', hapus_rekening, name='hapus_rekening'),
+    path('api/rekening/<int:pelanggan_id>/', list_rekening, name='list_rekening'),
     path('api/tanggungan/list/', list_tanggungan, name='list_tanggungan'),
     path('api/tanggungan/lunasin_bb/', lunasin_bb, name='lunasin_bb'),
     path('api/tanggungan/selesai_tf/', selesaikan_tf, name='selesaikan_tf'),

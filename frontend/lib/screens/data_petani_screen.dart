@@ -330,6 +330,7 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
   Map? stats;
   List notaHistory = [];
   List kasbonHistory = [];
+  List rekeningList = [];
   bool isLoading = false;
   late TabController _tab;
 
@@ -357,6 +358,7 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
           stats = data['stats'];
           notaHistory = data['nota_history'] ?? [];
           kasbonHistory = data['kasbon_history'] ?? [];
+          rekeningList = data['rekening_list'] ?? [];
         });
       }
     } catch (e) {
@@ -456,6 +458,7 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
                   ),
                 ),
               ),
+              SliverToBoxAdapter(child: _rekeningCard()),
               SliverToBoxAdapter(
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -506,6 +509,140 @@ class _DetailPetaniScreenState extends State<DetailPetaniScreen> with SingleTick
         Text(label, style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 9, fontWeight: FontWeight.w600)),
       ]),
     );
+  }
+
+  Widget _rekeningCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey.shade200)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.account_balance_rounded, size: 16, color: Colors.blue.shade700),
+              const SizedBox(width: 6),
+              const Text('Rekening Bank', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => _dialogRekening(),
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('Tambah', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700, padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32)),
+              ),
+            ]),
+            if (rekeningList.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text('Belum ada rekening. Tap "Tambah" untuk menambah.', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500, fontStyle: FontStyle.italic)),
+              )
+            else
+              ...rekeningList.map((r) {
+                final nama = (r['atas_nama'] ?? '').toString().trim();
+                final nomor = (r['nomor'] ?? '').toString().trim();
+                return Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(color: Colors.blue.shade50.withOpacity(0.4), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.blue.shade100)),
+                  child: Row(children: [
+                    Icon(Icons.credit_card_rounded, size: 15, color: Colors.blue.shade400),
+                    const SizedBox(width: 8),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(nomor, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.black87)),
+                      if (nama.isNotEmpty) Text('a.n. $nama', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                    ])),
+                    InkWell(onTap: () => _dialogRekening(existing: r), borderRadius: BorderRadius.circular(8), child: Padding(padding: const EdgeInsets.all(4), child: Icon(Icons.edit_rounded, size: 16, color: Colors.grey.shade600))),
+                    const SizedBox(width: 2),
+                    InkWell(onTap: () => _hapusRekening(r), borderRadius: BorderRadius.circular(8), child: Padding(padding: const EdgeInsets.all(4), child: Icon(Icons.delete_outline_rounded, size: 16, color: Colors.red.shade400))),
+                  ]),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _dialogRekening({Map? existing}) async {
+    final nomorCtrl = TextEditingController(text: existing?['nomor']?.toString() ?? '');
+    final namaCtrl = TextEditingController(text: existing?['atas_nama']?.toString() ?? '');
+    bool saving = false;
+    await showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (ctx, setD) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Text(existing == null ? 'Tambah Rekening' : 'Edit Rekening', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nomorCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(isDense: true, labelText: 'Nomor Rekening', prefixIcon: const Icon(Icons.tag_rounded, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+            const SizedBox(height: 10),
+            TextField(controller: namaCtrl, textCapitalization: TextCapitalization.words, decoration: InputDecoration(isDense: true, labelText: 'Atas Nama (opsional)', prefixIcon: const Icon(Icons.person_rounded, size: 18), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+          ]),
+          actions: [
+            TextButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              onPressed: saving ? null : () async {
+                final nomor = nomorCtrl.text.trim();
+                if (nomor.isEmpty) { showCustomSnackbar(context, 'Nomor rekening wajib diisi!', isError: true); return; }
+                setD(() => saving = true);
+                final ok = await _simpanRekening(existing?['id'], nomor, namaCtrl.text.trim());
+                if (ok && ctx.mounted) { Navigator.pop(ctx); }
+                else { setD(() => saving = false); }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white, elevation: 0),
+              child: saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Simpan'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  Future<bool> _simpanRekening(dynamic rekId, String nomor, String atasNama) async {
+    try {
+      final isEdit = rekId != null;
+      final url = isEdit ? '${AppConfig.baseUrl}/api/rekening/edit/' : '${AppConfig.baseUrl}/api/rekening/tambah/';
+      final body = isEdit
+        ? {'rekening_id': rekId, 'nomor': nomor, 'atas_nama': atasNama}
+        : {'pelanggan_id': widget.pelangganId, 'nomor': nomor, 'atas_nama': atasNama};
+      final res = await http.post(Uri.parse(url), headers: {'Content-Type': 'application/json'}, body: json.encode(body));
+      final data = json.decode(res.body);
+      if (res.statusCode == 200 && data['status'] == 'sukses') {
+        await fetchProfil();
+        if (mounted) showCustomSnackbar(context, isEdit ? 'Rekening diperbarui.' : 'Rekening ditambahkan.');
+        return true;
+      } else {
+        if (mounted) showCustomSnackbar(context, data['pesan'] ?? 'Gagal menyimpan rekening.', isError: true);
+        return false;
+      }
+    } catch (_) {
+      if (mounted) showCustomSnackbar(context, 'Gagal menyimpan rekening!', isError: true);
+      return false;
+    }
+  }
+
+  Future<void> _hapusRekening(Map r) async {
+    final konfirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Hapus Rekening?', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+        content: Text('Hapus rekening ${(r['nomor'] ?? '').toString()}${(r['atas_nama'] ?? '').toString().trim().isEmpty ? '' : ' (a.n. ${r['atas_nama']})'}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, elevation: 0), child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (konfirm != true) return;
+    try {
+      final res = await http.post(Uri.parse('${AppConfig.baseUrl}/api/rekening/hapus/'), headers: {'Content-Type': 'application/json'}, body: json.encode({'rekening_id': r['id']}));
+      if (res.statusCode == 200) { await fetchProfil(); if (mounted) showCustomSnackbar(context, 'Rekening dihapus.'); }
+      else { if (mounted) showCustomSnackbar(context, 'Gagal menghapus rekening.', isError: true); }
+    } catch (_) {
+      if (mounted) showCustomSnackbar(context, 'Gagal menghapus rekening!', isError: true);
+    }
   }
 
   Widget _buildNotaList() {

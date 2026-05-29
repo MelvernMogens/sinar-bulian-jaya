@@ -5,6 +5,7 @@ import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 
 import '../utils/helpers.dart';
 import '../utils/constants.dart';
+import 'rekening_picker.dart';
 
 // ============================================================================
 // 1. HALAMAN PILIH PETANI (KASIR)
@@ -276,9 +277,16 @@ class _FormNotaScreenState extends State<FormNotaScreen> {
   
   // --- VARIABEL SPLIT PAYMENT ---
   String metodeBayar = 'CASH'; // Metode Utama
-  bool isSplitPayment = false; 
+  bool isSplitPayment = false;
   final nominalSplitCtrl = TextEditingController();
   String metodeBayar2 = 'BB'; // Metode Kedua (Sisa tagihan)
+  // ------------------------------
+
+  // --- Rekening tujuan TF (dipilih lewat popup) ---
+  String? rekTfNomor;
+  String? rekTfAtasNama;
+  bool rekTfBelumAda = false;   // true = user pilih "rekening belum ada"
+  bool rekTfSudahPilih = false; // true = popup sudah diisi (biar UI tau)
   // ------------------------------
 
   DateTime tglTransfer = DateTime.now(); 
@@ -511,9 +519,12 @@ class _FormNotaScreenState extends State<FormNotaScreen> {
                         'nominal_bayar_2': isSplitPayment ? sisaSplitTagihan : 0,
                         // ----------------------------------------
 
-                        'tanggal_transfer': formattedDate, 
-                        'setoran_pinjaman': kasbonCetak.toInt().toString(), 
-                        'total_bayar_akhir': finalBayarAkhir
+                        'tanggal_transfer': formattedDate,
+                        'setoran_pinjaman': kasbonCetak.toInt().toString(),
+                        'total_bayar_akhir': finalBayarAkhir,
+                        // Rekening tujuan TF — cuma dikirim kalau ada porsi TF & bukan "belum ada"
+                        'rekening_nomor': ((metodeBayar == 'TF' || (isSplitPayment && metodeBayar2 == 'TF')) && !rekTfBelumAda) ? rekTfNomor : null,
+                        'rekening_atas_nama': ((metodeBayar == 'TF' || (isSplitPayment && metodeBayar2 == 'TF')) && !rekTfBelumAda) ? rekTfAtasNama : null,
                       })
                     ); 
 
@@ -647,13 +658,39 @@ class _FormNotaScreenState extends State<FormNotaScreen> {
     bool isSelected = isMetodeUtama ? (metodeBayar == id) : (metodeBayar2 == id);
     return Expanded(
       child: InkWell(
-        onTap: () {
+        onTap: () async {
+          // Kalau pilih TF -> munculin popup pilih rekening dulu.
+          if (id == 'TF') {
+            final hasil = await pilihRekeningTF(context, widget.pelangganId, widget.nama);
+            if (hasil == null) return; // Batal -> jangan ganti metode
+            if (!mounted) return;
+            setState(() {
+              if (isMetodeUtama) {
+                metodeBayar = 'TF';
+              } else {
+                metodeBayar2 = 'TF';
+              }
+              rekTfBelumAda = hasil.belumAda;
+              rekTfNomor = hasil.belumAda ? null : hasil.nomor;
+              rekTfAtasNama = hasil.belumAda ? null : hasil.atasNama;
+              rekTfSudahPilih = true;
+            });
+            return;
+          }
           setState(() {
             if (isMetodeUtama) {
               metodeBayar = id;
               if (metodeBayar == 'CASH') isSplitPayment = false; // Cash otomatis matiin Split biar gak bingung
             } else {
               metodeBayar2 = id;
+            }
+            // Kalau sudah gaada porsi TF, reset info rekening
+            final adaTf = metodeBayar == 'TF' || (isSplitPayment && metodeBayar2 == 'TF');
+            if (!adaTf) {
+              rekTfSudahPilih = false;
+              rekTfBelumAda = false;
+              rekTfNomor = null;
+              rekTfAtasNama = null;
             }
           });
         },
@@ -893,8 +930,46 @@ class _FormNotaScreenState extends State<FormNotaScreen> {
                               _buildPaymentMethodBtn('TF', 'TRANSFER', Icons.account_balance_rounded, Colors.blue.shade600, true),
                               _buildPaymentMethodBtn('BB', 'BELUM BAYAR', Icons.warning_rounded, Colors.red.shade600, true),
                             ]
-                          ), 
-                          
+                          ),
+
+                          // --- INFO REKENING TUJUAN TF ---
+                          if ((metodeBayar == 'TF' || (isSplitPayment && metodeBayar2 == 'TF')) && rekTfSudahPilih) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: rekTfBelumAda ? Colors.orange.shade50 : Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: rekTfBelumAda ? Colors.orange.shade200 : Colors.blue.shade200),
+                              ),
+                              child: Row(children: [
+                                Icon(rekTfBelumAda ? Icons.help_outline_rounded : Icons.account_balance_rounded, size: 16, color: rekTfBelumAda ? Colors.orange.shade800 : Colors.blue.shade700),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    rekTfBelumAda
+                                      ? 'Transfer ke: rekening belum ada'
+                                      : 'Transfer ke: ${(rekTfAtasNama ?? '').trim().isEmpty ? '' : '${rekTfAtasNama!.trim()} • '}${rekTfNomor ?? ''}',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: rekTfBelumAda ? Colors.orange.shade900 : Colors.blue.shade900),
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () async {
+                                    final hasil = await pilihRekeningTF(context, widget.pelangganId, widget.nama);
+                                    if (hasil == null || !mounted) return;
+                                    setState(() {
+                                      rekTfBelumAda = hasil.belumAda;
+                                      rekTfNomor = hasil.belumAda ? null : hasil.nomor;
+                                      rekTfAtasNama = hasil.belumAda ? null : hasil.atasNama;
+                                      rekTfSudahPilih = true;
+                                    });
+                                  },
+                                  child: Text('Ubah', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: Colors.blue.shade700)),
+                                ),
+                              ]),
+                            ),
+                          ],
+
                           // --- KOTAK SPLIT PAYMENT ---
                           if (metodeBayar == 'TF' || metodeBayar == 'BB') ...[
                             const SizedBox(height: 16),

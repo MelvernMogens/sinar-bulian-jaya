@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart'; // <--- IMPORT SAKTI
 import '../utils/helpers.dart';
 import '../utils/constants.dart';
+import 'rekening_picker.dart';
 
 class KeuanganScreen extends StatefulWidget { 
   const KeuanganScreen({super.key}); 
@@ -119,8 +120,8 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
     }
   }
 
-  void konfirmasiLunasinBB(int notaId, String nama, String total) {
-    String selectedMetode = 'CASH'; 
+  void konfirmasiLunasinBB(int notaId, int pelangganId, String nama, String total) {
+    String selectedMetode = 'CASH';
 
     showDialog(
       context: context,
@@ -186,9 +187,20 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade800, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                onPressed: () {
-                  Navigator.pop(context);
-                  _eksekusiLunasinBB(notaId, selectedMetode);
+                onPressed: () async {
+                  if (selectedMetode == 'TF') {
+                    // Pilih rekening tujuan dulu lewat popup
+                    final hasil = await pilihRekeningTF(context, pelangganId.toString(), nama);
+                    if (hasil == null) return; // batal -> tetap di dialog pelunasan
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    _eksekusiLunasinBB(notaId, selectedMetode,
+                      rekNomor: hasil.belumAda ? null : hasil.nomor,
+                      rekAtasNama: hasil.belumAda ? null : hasil.atasNama);
+                  } else {
+                    Navigator.pop(context);
+                    _eksekusiLunasinBB(notaId, selectedMetode);
+                  }
                 },
                 child: const Text('Simpan & Lunasi', style: TextStyle(fontWeight: FontWeight.bold)),
               )
@@ -199,13 +211,13 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
     );
   }
 
-  Future<void> _eksekusiLunasinBB(int notaId, String metode) async { 
+  Future<void> _eksekusiLunasinBB(int notaId, String metode, {String? rekNomor, String? rekAtasNama}) async {
     try {
       final res = await http.post(
-        Uri.parse('${AppConfig.baseUrl}/api/tanggungan/lunasin_bb/'), 
+        Uri.parse('${AppConfig.baseUrl}/api/tanggungan/lunasin_bb/'),
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: json.encode({'nota_id': notaId, 'metode': metode})
-      ); 
+        body: json.encode({'nota_id': notaId, 'metode': metode, 'rekening_nomor': rekNomor, 'rekening_atas_nama': rekAtasNama})
+      );
       
       if (res.statusCode == 200) { 
         fetchData(); 
@@ -567,7 +579,7 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
                                                           elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                                         ),
-                                                        onPressed: () => konfirmasiLunasinBB(bb['id'], bb['nama'], fTotal),
+                                                        onPressed: () => konfirmasiLunasinBB(bb['id'], int.tryParse('${bb['pelanggan_id'] ?? 0}') ?? 0, bb['nama'], fTotal),
                                                         child: const Text('LUNASI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
                                                       ),
                                                     ],
@@ -682,6 +694,18 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
                                                             ),
                                                             const SizedBox(height: 4),
                                                             Text(fNom, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.blue.shade700)),
+                                                            if (((tf['rekening_nomor'] ?? '').toString().trim().isNotEmpty) || ((tf['rekening_atas_nama'] ?? '').toString().trim().isNotEmpty)) ...[
+                                                              const SizedBox(height: 3),
+                                                              Row(children: [
+                                                                Icon(Icons.account_balance_rounded, size: 11, color: Colors.blue.shade400),
+                                                                const SizedBox(width: 4),
+                                                                Flexible(child: Text(
+                                                                  ((tf['rekening_atas_nama'] ?? '').toString().trim().isEmpty ? '' : '${(tf['rekening_atas_nama']).toString().trim()} • ') + (tf['rekening_nomor'] ?? '').toString().trim(),
+                                                                  style: TextStyle(fontSize: 10, color: Colors.blue.shade800, fontWeight: FontWeight.w600),
+                                                                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                                                                )),
+                                                              ]),
+                                                            ],
                                                           ],
                                                         ),
                                                       ),

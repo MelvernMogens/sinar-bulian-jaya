@@ -978,6 +978,19 @@ class _LaporanScreenState extends State<LaporanScreen> {
                                   ],
                                 ),
                                 if (isSplit) Text('Bagian ${i + 1} dari ${payments.length}', style: TextStyle(fontSize: 9, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                                if (p['metode'] == 'TRANSFER' && (((p['rekening_nomor'] ?? '').toString().trim().isNotEmpty) || ((p['rekening_atas_nama'] ?? '').toString().trim().isNotEmpty)))
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Row(children: [
+                                      Icon(Icons.account_balance_rounded, size: 11, color: Colors.blue.shade400),
+                                      const SizedBox(width: 4),
+                                      Flexible(child: Text(
+                                        ((p['rekening_atas_nama'] ?? '').toString().trim().isEmpty ? '' : '${(p['rekening_atas_nama']).toString().trim()} • ') + (p['rekening_nomor'] ?? '').toString().trim(),
+                                        style: TextStyle(fontSize: 9.5, color: Colors.blue.shade800, fontWeight: FontWeight.w600),
+                                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                                      )),
+                                    ]),
+                                  ),
                               ],
                             ),
                           ),
@@ -1270,6 +1283,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
         'pembayaran_id': t['pembayaran_id'],
         'is_lunas': t['is_lunas'] ?? true,
         'lunas_via': t['lunas_via'],
+        'rekening_nomor': t['rekening_nomor'],
+        'rekening_atas_nama': t['rekening_atas_nama'],
       });
     }
     final List<Map<String, dynamic>> groupedNotas = _groupedMap.values.toList();

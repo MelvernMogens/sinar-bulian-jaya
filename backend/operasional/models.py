@@ -15,6 +15,20 @@ class Pelanggan(models.Model):
     def __str__(self):
         return self.nama
 
+
+class RekeningPetani(models.Model):
+    """Satu petani bisa punya banyak rekening (nomor + atas nama)."""
+    pelanggan = models.ForeignKey(Pelanggan, on_delete=models.CASCADE, related_name='rekening_list')
+    nomor = models.CharField(max_length=60)
+    atas_nama = models.CharField(max_length=120, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['atas_nama', 'id']
+
+    def __str__(self):
+        return f"{self.atas_nama or '(tanpa nama)'} - {self.nomor}"
+
 class Nota(models.Model):
     STATUS_PILIHAN = [('LUNAS', 'Lunas'), ('BB', 'Belum Bayar (BB)')]
 
@@ -76,6 +90,10 @@ class Pembayaran(models.Model):
     keterangan = models.TextField(blank=True, null=True)
     is_setoran_pinjaman = models.BooleanField(default=False)
     is_selesai = models.BooleanField(default=False)
+    # Snapshot rekening tujuan kalau metode TRANSFER (disimpan saat dipilih,
+    # tetap kebaca walau rekening petani dihapus belakangan).
+    rekening_nomor = models.CharField(max_length=60, blank=True, null=True)
+    rekening_atas_nama = models.CharField(max_length=120, blank=True, null=True)
 
 class BukuKasbon(models.Model):
     TIPE_PILIHAN = [('PINJAM', 'Pinjaman Baru'), ('SETOR', 'Setoran')]
