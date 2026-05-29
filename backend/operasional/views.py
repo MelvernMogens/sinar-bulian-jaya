@@ -351,15 +351,23 @@ def buat_nota(request):
                     )
                     
                     
+                    # Susun info kontak buat notif (telp & rekening kalau ada)
+                    _kontak = []
+                    if pelanggan.no_telp:
+                        _kontak.append(f"Telp: {pelanggan.no_telp}")
+                    if pelanggan.no_rekening:
+                        _kontak.append(f"Rek: {pelanggan.no_rekening}")
+                    _kontak_str = (" | " + " | ".join(_kontak)) if _kontak else ""
+
                     if status_nota == 'BB':
                         kirim_notif_ke_owner(
-                            "⚠️ Tagihan Belum Bayar (BB)!", 
-                            f"Kasir membuat nota BB untuk {pelanggan.nama}. Total: Rp {bayar_1_nota + bayar_2_nota:,.0f}."
+                            "⚠️ Tagihan Belum Bayar (BB)!",
+                            f"Nota BB untuk {pelanggan.nama}. Total: Rp {bayar_1_nota + bayar_2_nota:,.0f}.{_kontak_str}"
                         )
                     elif (not is_split and metode_bayar == 'TF') or (is_split and (metode_bayar == 'TF' or metode_2 == 'TF')):
                         kirim_notif_ke_owner(
-                            "🔔 Antrian Transfer Baru!", 
-                            f"Ada tagihan Transfer untuk {pelanggan.nama}. Segera cek menu Keuangan."
+                            "🔔 Antrian Transfer Baru!",
+                            f"Tagihan Transfer untuk {pelanggan.nama}.{_kontak_str} Cek menu Keuangan."
                         )
                 
 
@@ -469,6 +477,93 @@ def history_kasbon_pelanggan(request, pelanggan_id):
             'jumlah_transaksi': entries.count(),
         },
         'history': history,
+    })
+
+
+def profil_petani(request, pelanggan_id):
+    """Profil lengkap petani: info kontak + statistik + riwayat nota + riwayat kasbon."""
+    try:
+        p = Pelanggan.objects.get(id=pelanggan_id)
+    except Pelanggan.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Petani tidak ditemukan.'}, status=404)
+
+    # --- Riwayat Nota ---
+    notas = Nota.objects.filter(pelanggan=p).order_by('-tanggal')
+    nota_history = []
+    total_tonase = Decimal('0')
+    total_nilai = Decimal('0')
+    bb_aktif_count = 0
+    for n in notas:
+        nbersih = Decimal(str(n.total_bersih))
+        total_tonase += Decimal(str(n.berat_kg))
+        total_nilai += nbersih
+        if n.status_bayar == 'BB':
+            bb_aktif_count += 1
+        nota_history.append({
+            'id': n.id,
+            'tanggal': timezone.localtime(n.tanggal).strftime('%Y-%m-%d %H:%M') if n.tanggal else '-',
+            'berat_kg': float(n.berat_kg),
+            'harga_per_kg': float(n.harga_per_kg),
+            'total_bersih': float(nbersih),
+            'status_bayar': n.status_bayar,
+        })
+
+    # --- Riwayat Kasbon ---
+    entries = BukuKasbon.objects.filter(pelanggan=p).order_by('tanggal', 'id')
+    kasbon_history = []
+    running = Decimal('0')
+    total_pinjam = Decimal('0')
+    total_setor = Decimal('0')
+    for e in entries:
+        nom = Decimal(str(e.nominal))
+        if e.tipe_transaksi == 'PINJAM':
+            running += nom
+            total_pinjam += nom
+        else:
+            running -= nom
+            total_setor += nom
+        kasbon_history.append({
+            'id': e.id,
+            'tanggal': e.tanggal.strftime('%Y-%m-%d'),
+            'tipe': e.tipe_transaksi,
+            'nominal': float(nom),
+            'saldo_setelah': float(running),
+            'keterangan': e.keterangan or '',
+        })
+    kasbon_history.reverse()  # terbaru di atas
+
+    # --- TF pending count ---
+    tf_pending = Pembayaran.objects.filter(nota__pelanggan=p, metode='TRANSFER', is_selesai=False).count()
+
+    # --- Transaksi terakhir ---
+    last_nota = notas.first()
+    transaksi_terakhir = timezone.localtime(last_nota.tanggal).strftime('%Y-%m-%d') if last_nota and last_nota.tanggal else '-'
+
+    rata_harga = float(total_nilai / total_tonase) if total_tonase > 0 else 0
+
+    return JsonResponse({
+        'status': 'sukses',
+        'info': {
+            'id': p.id,
+            'nama': p.nama,
+            'no_telp': p.no_telp or '',
+            'no_rekening': p.no_rekening or '',
+            'total_kasbon': float(p.total_kasbon),
+            'terdaftar_sejak': p.created_at.strftime('%Y-%m-%d') if p.created_at else '-',
+        },
+        'stats': {
+            'jumlah_nota': notas.count(),
+            'total_tonase': float(total_tonase),
+            'total_nilai': float(total_nilai),
+            'rata_harga_per_kg': rata_harga,
+            'bb_aktif': bb_aktif_count,
+            'tf_pending': tf_pending,
+            'transaksi_terakhir': transaksi_terakhir,
+            'total_pinjam': float(total_pinjam),
+            'total_setor': float(total_setor),
+        },
+        'nota_history': nota_history,
+        'kasbon_history': kasbon_history,
     })
 
 
