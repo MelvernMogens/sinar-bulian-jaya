@@ -1591,11 +1591,11 @@ def get_lot_detail(request, lot_id):
         drc_gudang = (harga_modal_gudang / harga_jual_pabrik * 100) if (harga_jual_pabrik > 0 and harga_modal_gudang > 0) else 0.0
         drc_pabrik = (harga_modal_pabrik / harga_jual_pabrik * 100) if (harga_jual_pabrik > 0 and harga_modal_pabrik > 0) else 0.0
         # BL = (gilingan pabrik basah / total timbangan pabrik) * 100 -> persentase
-        # VM = gilingan pabrik kering / BL
+        # VM = (gilingan pabrik kering / gilingan pabrik basah) * 100 -> persentase
         gilingan_basah = float(lot.gilingan_basah or 0)
         gilingan_kering = float(lot.gilingan_kering or 0)
         bl_val = (gilingan_basah / float(t_tonase_pabrik_lot) * 100) if (float(t_tonase_pabrik_lot) > 0 and gilingan_basah > 0) else 0.0
-        vm_val = (gilingan_kering / bl_val) if bl_val > 0 else 0.0
+        vm_val = (gilingan_kering / gilingan_basah * 100) if (gilingan_basah > 0 and gilingan_kering > 0) else 0.0
         return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': bl_val, 'vm': vm_val, 'gilingan_basah': gilingan_basah, 'gilingan_kering': gilingan_kering, 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_tonase_gudang': float(t_tonase_gudang_lot), 'total_tonase_gudang_ditimbang': float(t_gudang_ditimbang), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal_pabrik, 'harga_modal_pabrik': harga_modal_pabrik, 'harga_modal_gudang': harga_modal_gudang, 'harga_jual_pabrik': harga_jual_pabrik, 'drc_gudang': drc_gudang, 'drc_pabrik': drc_pabrik, 'avg_penyusutan_pct': avg_penyusutan_pct, 'total_penyusutan_kg': total_penyusutan_kg, 'shipments': items_data})
     except LotPabrik.DoesNotExist: return JsonResponse({'status': 'error'}, status=404)
 

@@ -498,7 +498,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                         Divider(height: 16, color: Colors.grey.shade200),
                                         _buildInfoRow('BL', (double.tryParse('${data!['bl'] ?? 0}') ?? 0) > 0 ? '${formatTonase(data!['bl'])}%' : '-', Icons.receipt_long_rounded, valueColor: Colors.teal.shade800),
                                         Divider(height: 16, color: Colors.grey.shade200),
-                                        _buildInfoRow('VM', (double.tryParse('${data!['vm'] ?? 0}') ?? 0) > 0 ? formatTonase(data!['vm']) : '-', Icons.confirmation_number_rounded, valueColor: Colors.teal.shade800),
+                                        _buildInfoRow('VM', (double.tryParse('${data!['vm'] ?? 0}') ?? 0) > 0 ? '${formatTonase(data!['vm'])}%' : '-', Icons.confirmation_number_rounded, valueColor: Colors.teal.shade800),
                                         Divider(height: 16, color: Colors.grey.shade200),
                                         _buildPenyusutanRow(),
                                       ],
