@@ -302,6 +302,55 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
     );
   }
 
+  // Indikator Gain/Loss = DRC Actual - DRC Pabrik (plus = gain/hijau, minus = loss/merah)
+  Widget _buildGainLossBanner() {
+    final double drcAct = double.tryParse('${data!['drc_actual'] ?? 0}') ?? 0;
+    final double drcPab = double.tryParse('${data!['drc_pabrik'] ?? 0}') ?? 0;
+    if (drcAct <= 0 || drcPab <= 0) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+        child: Row(children: [
+          Icon(Icons.info_outline_rounded, size: 16, color: Colors.grey.shade500),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Isi Gilingan (basah & kering) + Harga Jual Dasar Pabrik buat lihat Gain/Loss.', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w600))),
+        ]),
+      );
+    }
+    final double selisih = drcAct - drcPab;
+    final bool gain = selisih >= 0;
+    final Color c = gain ? Colors.green : Colors.red;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gain ? [Colors.green.shade600, Colors.green.shade400] : [Colors.red.shade600, Colors.red.shade400],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: c.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 6))],
+      ),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+          child: Icon(gain ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: Colors.white, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(gain ? 'GAIN' : 'LOSS', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 1)),
+          const SizedBox(height: 2),
+          Text('DRC Actual ${formatTonase(drcAct)}% − DRC Pabrik ${formatTonase(drcPab)}%', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 10.5, fontWeight: FontWeight.w600)),
+        ])),
+        Text('${gain ? '+' : '−'}${formatTonase(selisih.abs())}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.5)),
+      ]),
+    );
+  }
+
   // Kartu Analisa Harga & DRC per LOT
   Widget _buildAnalisaHargaCard() {
     final double hargaJual = double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0;
@@ -425,6 +474,8 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // --- INDIKATOR GAIN / LOSS (DRC Actual - DRC Pabrik) ---
+                        _buildGainLossBanner(),
                         // --- KARTU ESTIMASI MODAL SULTAN ---
                         Container(
                           padding: const EdgeInsets.all(24),
