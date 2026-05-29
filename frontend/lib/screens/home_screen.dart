@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     const Icon(Icons.scale, color: Colors.amber, size: 18),
                                     const SizedBox(width: 8),
                                     const Text('Tonase Hari Ini: ', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                    Text('${tonaseHariIni.toStringAsFixed(0)} Kg', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                    Text('${formatRibuan(tonaseHariIni)} Kg', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                                   ],
                                 ),
                               ),

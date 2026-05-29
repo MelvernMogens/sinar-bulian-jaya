@@ -15,6 +15,21 @@ String formatRp(dynamic number) {
   return isNegative ? '- Rp $result' : 'Rp $result';
 }
 
+// Format angka biasa dengan pemisah ribuan (titik), tanpa "Rp". Contoh: 1000 -> 1.000
+String formatRibuan(dynamic number) {
+  double value = double.tryParse(number.toString()) ?? 0;
+  bool isNegative = value < 0;
+  String str = value.abs().toInt().toString();
+  String result = '';
+  int count = 0;
+  for (int i = str.length - 1; i >= 0; i--) {
+    if (count != 0 && count % 3 == 0) result = '.$result';
+    result = str[i] + result;
+    count++;
+  }
+  return isNegative ? '-$result' : result;
+}
+
 void showCustomSnackbar(BuildContext context, String message, {bool isError = false}) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
