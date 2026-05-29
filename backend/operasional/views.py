@@ -123,7 +123,10 @@ def tambah_pelanggan(request):
         # Cek duplikasi nama (case-insensitive)
         if Pelanggan.objects.filter(nama__iexact=nama).exists():
             return JsonResponse({'status': 'gagal', 'pesan': f'Petani "{nama}" sudah terdaftar.'}, status=400)
-        Pelanggan.objects.create(nama=nama, no_telp=no_telp, no_rekening=no_rekening)
+        p = Pelanggan.objects.create(nama=nama, no_telp=no_telp, no_rekening=no_rekening)
+        # Sinkron: rekening kontak ikut masuk ke daftar rekening (buat popup TF)
+        if no_rekening:
+            RekeningPetani.objects.get_or_create(pelanggan=p, nomor=no_rekening, defaults={'atas_nama': ''})
         return JsonResponse({'status': 'sukses', 'pesan': f'Petani {nama} ditambahkan.'})
     except json.JSONDecodeError:
         return JsonResponse({'status': 'gagal', 'pesan': 'Format request tidak valid.'}, status=400)
@@ -150,6 +153,9 @@ def edit_pelanggan(request):
         pelanggan.no_telp = (data.get('no_telp') or '').strip() or None
         pelanggan.no_rekening = (data.get('no_rekening') or '').strip() or None
         pelanggan.save()
+        # Sinkron: rekening kontak ikut masuk ke daftar rekening (buat popup TF)
+        if pelanggan.no_rekening:
+            RekeningPetani.objects.get_or_create(pelanggan=pelanggan, nomor=pelanggan.no_rekening, defaults={'atas_nama': ''})
 
         username = data.get('username')
         editor = User.objects.filter(username=username).first() if username else None
