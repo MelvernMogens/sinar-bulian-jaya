@@ -564,6 +564,14 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                                                   const SizedBox(height: 4),
                                                   // Nunjukin Tonase dan Harga Beli (Dasar)
                                                   Text('${it['tonase']} Kg • Beli: ${formatRp(it['harga'])}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                                                  if ((it['no_telp'] ?? '').toString().trim().isNotEmpty) ...[
+                                                    const SizedBox(height: 3),
+                                                    Row(children: [
+                                                      Icon(Icons.phone_rounded, size: 11, color: Colors.green.shade600),
+                                                      const SizedBox(width: 3),
+                                                      Text(it['no_telp'].toString(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.green.shade700)),
+                                                    ]),
+                                                  ],
                                                 ],
                                               ),
                                             ),

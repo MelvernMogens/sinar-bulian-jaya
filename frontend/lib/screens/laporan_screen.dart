@@ -866,6 +866,20 @@ class _LaporanScreenState extends State<LaporanScreen> {
               child: Column(
                 children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('No. Nota', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('#$notaId', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
+                  if ((g['no_telp'] ?? '').toString().trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Row(children: [Icon(Icons.phone_rounded, size: 12, color: Colors.green.shade600), const SizedBox(width: 4), const Text('Telp', style: TextStyle(fontSize: 12, color: Colors.black54))]),
+                      Text(g['no_telp'].toString(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green.shade800)),
+                    ]),
+                  ],
+                  if ((g['no_rekening'] ?? '').toString().trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Row(children: [Icon(Icons.account_balance_rounded, size: 12, color: Colors.indigo.shade600), const SizedBox(width: 4), const Text('Rekening', style: TextStyle(fontSize: 12, color: Colors.black54))]),
+                      Flexible(child: Text(g['no_rekening'].toString(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.indigo.shade800), textAlign: TextAlign.right)),
+                    ]),
+                  ],
                   const SizedBox(height: 6),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Berat', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('${berat.toStringAsFixed(1)} Kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
                   const SizedBox(height: 6),
@@ -1234,6 +1248,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
         _groupedMap[notaId] = {
           'id': notaId,
           'nama_pelanggan': t['nama_pelanggan'],
+          'no_telp': t['no_telp'] ?? '',
+          'no_rekening': t['no_rekening'] ?? '',
           'jam': t['jam'],
           'berat_kg': t['berat_kg'],
           'harga_per_kg': t['harga_per_kg'],

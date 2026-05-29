@@ -693,6 +693,8 @@ def laporan_harian(request):
                 'id': n.id,
                 'pembayaran_id': r['pembayaran_id'],
                 'nama_pelanggan': n.pelanggan.nama,
+                'no_telp': n.pelanggan.no_telp or '',
+                'no_rekening': n.pelanggan.no_rekening or '',
                 'jam': jam_lokal,
                 'berat_kg': float(n.berat_kg),
                 'harga_per_kg': float(n.harga_per_kg),
@@ -1275,7 +1277,7 @@ def laporan_pengiriman(request):
             items = p.items.all()
             t_tonase = sum([i.tonase for i in items]) if items else Decimal('0')
             t_uang = sum([i.total_harga for i in items]) if items else Decimal('0')
-            detail_items = [{'id': i.id, 'nama': i.nama_tujuan, 'tonase': float(i.tonase), 'harga': float(i.harga_input), 'harga_jual': float(i.harga_jual), 'total': float(i.total_harga)} for i in items]
+            detail_items = [{'id': i.id, 'nama': i.nama_tujuan, 'no_telp': (i.pelanggan.no_telp if i.pelanggan else '') or '', 'no_rekening': (i.pelanggan.no_rekening if i.pelanggan else '') or '', 'tonase': float(i.tonase), 'harga': float(i.harga_input), 'harga_jual': float(i.harga_jual), 'total': float(i.total_harga)} for i in items]
             data.append({'id': p.id, 'tipe': p.tipe, 'judul': p.plat_mobil if p.tipe == 'KIRIM' else p.nama_stock, 'tanggal': p.tanggal.strftime('%d-%m-%Y'), 'total_tonase': float(t_tonase), 'total_uang': float(t_uang), 'items': detail_items, 'nama_lot': p.lot.nama_lot if p.lot else '-', 'lot_id': p.lot_id})
         return data
     return JsonResponse({'terkirim': serialize_pengiriman(terkirim_qs), 'stock_aktif': serialize_pengiriman(stock_qs)})
