@@ -43,23 +43,49 @@ class _MenuKasbonScreenState extends State<MenuKasbonScreen> {
     });
   }
 
-  void _dialogTambahPelangganBaru() {
-    final namaCtrl = TextEditingController();
+  Widget _petaniField(TextEditingController ctrl, String label, String hint, IconData icon, {TextInputType? type, TextCapitalization cap = TextCapitalization.none}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey.shade200)),
+      child: TextField(
+        controller: ctrl,
+        keyboardType: type,
+        textCapitalization: cap,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.normal),
+          prefixIcon: Icon(icon, size: 18, color: Colors.teal.shade700),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  // Dialog form petani — dipakai untuk TAMBAH (existing=null) maupun EDIT
+  void _dialogFormPetani({Map? existing}) {
+    final bool isEdit = existing != null;
+    final namaCtrl = TextEditingController(text: isEdit ? (existing['nama'] ?? '') : '');
+    final telpCtrl = TextEditingController(text: isEdit ? (existing['no_telp'] ?? '') : '');
+    final rekCtrl = TextEditingController(text: isEdit ? (existing['no_rekening'] ?? '') : '');
+
     showDialog(context: context, builder: (context) => AlertDialog(
       backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: const Text('Tambah Petani Baru', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-      content: Container(
-        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-        child: TextField(
-          controller: namaCtrl,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            hintText: 'Nama lengkap petani',
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.normal),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          ),
+      title: Text(isEdit ? 'Edit Info Petani' : 'Tambah Petani Baru', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _petaniField(namaCtrl, 'Nama Petani *', 'Nama lengkap', Icons.person_rounded, cap: TextCapitalization.words),
+            _petaniField(telpCtrl, 'No. Telepon (opsional)', 'Cth: 0812xxxx', Icons.phone_rounded, type: TextInputType.phone),
+            _petaniField(rekCtrl, 'No. Rekening (opsional)', 'Cth: BCA 1234567', Icons.account_balance_rounded),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('* Nama wajib diisi. Telp & rekening boleh dikosongkan.', style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontStyle: FontStyle.italic)),
+            ),
+          ],
         ),
       ),
       actionsPadding: const EdgeInsets.only(bottom: 16, right: 16, left: 16),
@@ -69,12 +95,7 @@ class _MenuKasbonScreenState extends State<MenuKasbonScreen> {
           child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
         ),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.teal.shade700,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
           onPressed: () async {
             final nama = namaCtrl.text.trim();
             if (nama.isEmpty) {
@@ -82,28 +103,33 @@ class _MenuKasbonScreenState extends State<MenuKasbonScreen> {
               return;
             }
             try {
-              final res = await http.post(
-                Uri.parse('${AppConfig.baseUrl}/api/pelanggan/tambah/'),
-                headers: {'Content-Type': 'application/json'},
-                body: json.encode({'nama': nama}),
-              );
+              final prefs = await SharedPreferences.getInstance();
+              final username = prefs.getString('username') ?? 'Sistem';
+              final url = isEdit ? '${AppConfig.baseUrl}/api/pelanggan/edit/' : '${AppConfig.baseUrl}/api/pelanggan/tambah/';
+              final payload = isEdit
+                ? {'pelanggan_id': existing['id'], 'nama': nama, 'no_telp': telpCtrl.text.trim(), 'no_rekening': rekCtrl.text.trim(), 'username': username}
+                : {'nama': nama, 'no_telp': telpCtrl.text.trim(), 'no_rekening': rekCtrl.text.trim()};
+              final res = await http.post(Uri.parse(url), headers: {'Content-Type': 'application/json'}, body: json.encode(payload));
               if (!mounted) return;
+              final body = json.decode(res.body);
               if (res.statusCode == 200) {
                 Navigator.pop(context);
-                showCustomSnackbar(context, 'Petani $nama berhasil ditambah!');
+                showCustomSnackbar(context, body['pesan'] ?? (isEdit ? 'Info petani diperbarui!' : 'Petani ditambahkan!'));
                 fetchPelanggan();
               } else {
-                showCustomSnackbar(context, 'Gagal menambah petani!', isError: true);
+                showCustomSnackbar(context, body['pesan'] ?? 'Gagal menyimpan!', isError: true);
               }
             } catch (e) {
               if (mounted) showCustomSnackbar(context, 'Koneksi ke server gagal!', isError: true);
             }
           },
-          child: const Text('Simpan', style: TextStyle(fontWeight: FontWeight.bold)),
+          child: Text(isEdit ? 'Update' : 'Simpan', style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     ));
   }
+
+  void _dialogTambahPelangganBaru() => _dialogFormPetani();
 
   Future<void> _kirimHapusPelanggan(dynamic pelangganId, String nama, bool force) async {
     try {
@@ -387,11 +413,23 @@ class _MenuKasbonScreenState extends State<MenuKasbonScreen> {
                                         icon: Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey.shade500),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         onSelected: (value) {
-                                          if (value == 'hapus') {
+                                          if (value == 'edit') {
+                                            _dialogFormPetani(existing: p);
+                                          } else if (value == 'hapus') {
                                             _konfirmasiHapusPelanggan(p['id'], p['nama'], kasbon);
                                           }
                                         },
                                         itemBuilder: (ctx) => [
+                                          PopupMenuItem(
+                                            value: 'edit',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.edit_rounded, color: Colors.teal.shade700, size: 18),
+                                                const SizedBox(width: 8),
+                                                Text('Edit Info Petani', style: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.w600, fontSize: 13)),
+                                              ],
+                                            ),
+                                          ),
                                           PopupMenuItem(
                                             value: 'hapus',
                                             child: Row(

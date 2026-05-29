@@ -202,7 +202,7 @@ class _PembelianScreenState extends State<PembelianScreen> {
                             color: Colors.transparent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(20),
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => FormNotaScreen(pelangganId: p['id'].toString(), nama: p['nama'], kasbonAwal: kasbon))).then((_) => fetchPelanggan()),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => FormNotaScreen(pelangganId: p['id'].toString(), nama: p['nama'], kasbonAwal: kasbon, noTelp: (p['no_telp'] ?? '').toString(), noRekening: (p['no_rekening'] ?? '').toString()))).then((_) => fetchPelanggan()),
                               child: Padding(
                                 padding: const EdgeInsets.all(16.0),
                                 child: Row(
@@ -256,12 +256,14 @@ class _PembelianScreenState extends State<PembelianScreen> {
 // ============================================================================
 // 2. HALAMAN FORM NOTA KASIR (DENGAN SPLIT PAYMENT)
 // ============================================================================
-class FormNotaScreen extends StatefulWidget { 
-  final String pelangganId; 
-  final String nama; 
-  final double kasbonAwal; 
-  const FormNotaScreen({super.key, required this.pelangganId, required this.nama, required this.kasbonAwal}); 
-  @override State<FormNotaScreen> createState() => _FormNotaScreenState(); 
+class FormNotaScreen extends StatefulWidget {
+  final String pelangganId;
+  final String nama;
+  final double kasbonAwal;
+  final String noTelp;
+  final String noRekening;
+  const FormNotaScreen({super.key, required this.pelangganId, required this.nama, required this.kasbonAwal, this.noTelp = '', this.noRekening = ''});
+  @override State<FormNotaScreen> createState() => _FormNotaScreenState();
 }
 
 class _FormNotaScreenState extends State<FormNotaScreen> { 
@@ -570,7 +572,18 @@ class _FormNotaScreenState extends State<FormNotaScreen> {
     bluetooth.printLeftRight("Nota:", "#$notaId", 0);
     bluetooth.printLeftRight("Tgl:", tglStr, 0);
     bluetooth.printLeftRight("Petani:", widget.nama, 0);
-    
+
+    // --- TELP & REKENING: HANYA DI COPY PABRIK ---
+    bool isCopyPabrik = labelCopy.toUpperCase().contains("PABRIK");
+    if (isCopyPabrik) {
+      if (widget.noTelp.trim().isNotEmpty) {
+        bluetooth.printLeftRight("Telp:", widget.noTelp.trim(), 0);
+      }
+      if (widget.noRekening.trim().isNotEmpty) {
+        bluetooth.printLeftRight("Rek:", widget.noRekening.trim(), 0);
+      }
+    }
+
     // --- STRUK ADAPTIF: BISA SPLIT ATAU FULL ---
     if (!isSplitPayment) {
       bluetooth.printLeftRight("Metode:", getLabelMetode(metodeBayar), 0); 

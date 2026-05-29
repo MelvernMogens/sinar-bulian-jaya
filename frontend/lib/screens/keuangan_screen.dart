@@ -271,6 +271,42 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
     return result;
   }
 
+  // Chip telp & rekening petani (rekening opsional)
+  Widget _kontakChips(dynamic telp, dynamic rekening) {
+    final String t = (telp ?? '').toString().trim();
+    final String r = (rekening ?? '').toString().trim();
+    if (t.isEmpty && r.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          if (t.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.green.shade200)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.phone_rounded, size: 11, color: Colors.green.shade700),
+                const SizedBox(width: 4),
+                Text(t, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.green.shade800)),
+              ]),
+            ),
+          if (r.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.indigo.shade200)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.account_balance_rounded, size: 11, color: Colors.indigo.shade700),
+                const SizedBox(width: 4),
+                Text(r, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.indigo.shade800)),
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold( 
@@ -480,11 +516,17 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
                                         ),
                                         subtitle: Padding(
                                           padding: const EdgeInsets.only(top: 6),
-                                          child: Row(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text(isMulti ? 'Total Tagihan' : 'Tagihan', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-                                              const SizedBox(width: 8),
-                                              Text(fTotalAll, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
+                                              Row(
+                                                children: [
+                                                  Text(isMulti ? 'Total Tagihan' : 'Tagihan', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                                  const SizedBox(width: 8),
+                                                  Text(fTotalAll, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
+                                                ],
+                                              ),
+                                              _kontakChips(notas.first['no_telp'], notas.first['no_rekening']),
                                             ],
                                           ),
                                         ),
@@ -598,11 +640,17 @@ class _KeuanganScreenState extends State<KeuanganScreen> {
                                         ),
                                         subtitle: Padding(
                                           padding: const EdgeInsets.only(top: 6),
-                                          child: Row(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text(isMulti ? 'Total Antrian' : 'Antrian', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-                                              const SizedBox(width: 8),
-                                              Text(fTotalAll, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.blue.shade700)),
+                                              Row(
+                                                children: [
+                                                  Text(isMulti ? 'Total Antrian' : 'Antrian', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                                  const SizedBox(width: 8),
+                                                  Text(fTotalAll, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.blue.shade700)),
+                                                ],
+                                              ),
+                                              _kontakChips(items.first['no_telp'], items.first['no_rekening']),
                                             ],
                                           ),
                                         ),
