@@ -127,8 +127,10 @@ class LotPabrik(models.Model):
     nama_lot = models.CharField(max_length=100)
     tanggal_buat = models.DateField(default=timezone.now)
     pabrik = models.CharField(max_length=100, blank=True, null=True)
-    bl = models.CharField(max_length=50, blank=True, null=True)
-    vm = models.CharField(max_length=50, blank=True, null=True)
+    bl = models.CharField(max_length=50, blank=True, null=True)  # legacy (sekarang BL dihitung otomatis)
+    vm = models.CharField(max_length=50, blank=True, null=True)  # legacy (sekarang VM dihitung otomatis)
+    gilingan_basah = models.DecimalField(max_digits=15, decimal_places=2, default=0)   # input manual -> BL = tonase pabrik / gilingan basah
+    gilingan_kering = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # input manual -> VM = gilingan kering / BL
     harga_jual_pabrik = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # harga jual dasar dari pabrik per kg
     is_selesai = models.BooleanField(default=False)
 

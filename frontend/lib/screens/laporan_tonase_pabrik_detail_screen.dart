@@ -76,11 +76,18 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
   }
 
   // --- DIALOG EDIT INFO LOT (PABRIK, BL, VM, NAMA) ---
+  // Init text input angka tanpa trailing .0 (kosong kalau <= 0)
+  String _numInit(dynamic v) {
+    final d = double.tryParse('$v') ?? 0;
+    if (d <= 0) return '';
+    return d == d.roundToDouble() ? d.toInt().toString() : d.toString();
+  }
+
   void dialogEditInfoLot() {
     final namaCtrl = TextEditingController(text: data!['nama_lot']);
     final pabrikCtrl = TextEditingController(text: data!['pabrik'] == '-' ? '' : data!['pabrik']);
-    final blCtrl = TextEditingController(text: data!['bl'] == '-' ? '' : data!['bl']);
-    final vmCtrl = TextEditingController(text: data!['vm'] == '-' ? '' : data!['vm']);
+    final gilinganBasahCtrl = TextEditingController(text: _numInit(data!['gilingan_basah']));
+    final gilinganKeringCtrl = TextEditingController(text: _numInit(data!['gilingan_kering']));
     final hargaJualCtrl = TextEditingController(text: (double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['harga_jual_pabrik']) : '');
 
     showDialog(
@@ -100,8 +107,8 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                 children: [
                   _buildDialogInput(controller: namaCtrl, hint: 'Nama / Kode Lot'),
                   _buildDialogInput(controller: pabrikCtrl, hint: 'Pabrik Tujuan'),
-                  _buildDialogInput(controller: blCtrl, hint: 'No. BL'),
-                  _buildDialogInput(controller: vmCtrl, hint: 'No. VM'),
+                  _buildDialogInput(controller: gilinganBasahCtrl, hint: 'Gilingan Pabrik Basah (→ BL)', type: const TextInputType.numberWithOptions(decimal: true)),
+                  _buildDialogInput(controller: gilinganKeringCtrl, hint: 'Gilingan Pabrik Kering (→ VM)', type: const TextInputType.numberWithOptions(decimal: true)),
                   _buildDialogInput(controller: hargaJualCtrl, hint: 'Harga Jual Dasar Pabrik /Kg', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
                 ],
               ),
@@ -128,9 +135,9 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                       body: json.encode({
                         'lot_id': widget.lotId.toString(), 
                         'nama_lot': namaCtrl.text, 
-                        'pabrik': pabrikCtrl.text, 
-                        'bl': blCtrl.text,
-                        'vm': vmCtrl.text,
+                        'pabrik': pabrikCtrl.text,
+                        'gilingan_basah': gilinganBasahCtrl.text.replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.]'), ''),
+                        'gilingan_kering': gilinganKeringCtrl.text.replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.]'), ''),
                         'harga_jual_pabrik': hargaJualCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
                         'username': currentUsername, // <--- KIRIM KE DJANGO
                       })
@@ -436,13 +443,13 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                     children: [
                                       Row(
                                         children: [
-                                          Icon(Icons.factory_rounded, color: Colors.teal.shade100, size: 14),
+                                          Icon(Icons.warehouse_rounded, color: Colors.teal.shade100, size: 14),
                                           const SizedBox(width: 6),
-                                          const Text('TIMBANGAN PABRIK', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                          const Text('TIMBANGAN GUDANG', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      Text('${formatTonase(data!['total_tonase_pabrik'])} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                                      Text('${formatTonase(data!['total_tonase_gudang'])} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                                     ]
                                   ),
                                   Container(width: 1, height: 40, color: Colors.white.withOpacity(0.2)), // Pembatas
@@ -451,13 +458,13 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                     children: [
                                       Row(
                                         children: [
-                                          const Text('TIMBANGAN GUDANG', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                          const Text('TIMBANGAN PABRIK', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
                                           const SizedBox(width: 6),
-                                          Icon(Icons.warehouse_rounded, color: Colors.teal.shade100, size: 14),
+                                          Icon(Icons.factory_rounded, color: Colors.teal.shade100, size: 14),
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      Text('${formatTonase(data!['total_tonase_gudang'])} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                                      Text('${formatTonase(data!['total_tonase_pabrik'])} Kg', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                                     ]
                                   ),
                                 ],
@@ -485,9 +492,13 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                         Divider(height: 14, color: Colors.grey.shade200),
                                         _buildInfoRow('Pabrik Tujuan', data!['pabrik'] ?? '-', Icons.domain_rounded),
                                         Divider(height: 16, color: Colors.grey.shade200),
-                                        _buildInfoRow('No. BL', data!['bl'] ?? '-', Icons.receipt_long_rounded),
+                                        _buildInfoRow('Gilingan Basah', (double.tryParse('${data!['gilingan_basah'] ?? 0}') ?? 0) > 0 ? '${formatTonase(data!['gilingan_basah'])} Kg' : '-', Icons.water_drop_rounded),
                                         Divider(height: 16, color: Colors.grey.shade200),
-                                        _buildInfoRow('No. VM', data!['vm'] ?? '-', Icons.confirmation_number_rounded),
+                                        _buildInfoRow('Gilingan Kering', (double.tryParse('${data!['gilingan_kering'] ?? 0}') ?? 0) > 0 ? '${formatTonase(data!['gilingan_kering'])} Kg' : '-', Icons.grain_rounded),
+                                        Divider(height: 16, color: Colors.grey.shade200),
+                                        _buildInfoRow('BL', (double.tryParse('${data!['bl'] ?? 0}') ?? 0) > 0 ? formatTonase(data!['bl']) : '-', Icons.receipt_long_rounded, valueColor: Colors.teal.shade800),
+                                        Divider(height: 16, color: Colors.grey.shade200),
+                                        _buildInfoRow('VM', (double.tryParse('${data!['vm'] ?? 0}') ?? 0) > 0 ? formatTonase(data!['vm']) : '-', Icons.confirmation_number_rounded, valueColor: Colors.teal.shade800),
                                         Divider(height: 16, color: Colors.grey.shade200),
                                         _buildPenyusutanRow(),
                                       ],
