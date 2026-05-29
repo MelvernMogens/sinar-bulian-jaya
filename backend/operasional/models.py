@@ -129,6 +129,7 @@ class LotPabrik(models.Model):
     pabrik = models.CharField(max_length=100, blank=True, null=True)
     bl = models.CharField(max_length=50, blank=True, null=True)
     vm = models.CharField(max_length=50, blank=True, null=True)
+    harga_jual_pabrik = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # harga jual dasar dari pabrik per kg
     is_selesai = models.BooleanField(default=False)
 
     @property

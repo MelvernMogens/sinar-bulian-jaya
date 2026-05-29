@@ -1498,7 +1498,7 @@ def get_lots(request):
                 t_pabrik_ditimbang += ton_p
         harga_modal = float(t_uang / t_tonase_pabrik) if t_tonase_pabrik > 0 else 0.0
         avg_penyusutan_pct = float((t_gudang_ditimbang - t_pabrik_ditimbang) / t_gudang_ditimbang * 100) if t_gudang_ditimbang > 0 else 0.0
-        data.append({'id': l.id, 'nama_lot': l.nama_lot, 'tanggal': l.tanggal_buat.strftime('%Y-%m-%d'), 'pabrik': l.pabrik or '-', 'total_uang_gudang': float(t_uang), 'total_tonase_pabrik': float(t_tonase_pabrik), 'harga_modal': harga_modal, 'avg_penyusutan_pct': avg_penyusutan_pct, 'is_selesai': l.is_selesai, 'jumlah_truk': pengirimans.count()})
+        data.append({'id': l.id, 'nama_lot': l.nama_lot, 'tanggal': l.tanggal_buat.strftime('%Y-%m-%d'), 'pabrik': l.pabrik or '-', 'total_uang_gudang': float(t_uang), 'total_tonase_pabrik': float(t_tonase_pabrik), 'harga_modal': harga_modal, 'harga_jual_pabrik': float(l.harga_jual_pabrik or 0), 'avg_penyusutan_pct': avg_penyusutan_pct, 'is_selesai': l.is_selesai, 'jumlah_truk': pengirimans.count()})
     return JsonResponse(data, safe=False)
 
 @csrf_exempt
@@ -1518,15 +1518,23 @@ def edit_lot(request):
         
         old_nama = lot.nama_lot
         old_pabrik = lot.pabrik
-        
+        old_harga_jual = lot.harga_jual_pabrik
+
         lot.nama_lot = data.get('nama_lot', lot.nama_lot)
         lot.pabrik = data.get('pabrik', lot.pabrik)
         lot.bl = data.get('bl', lot.bl)
         lot.vm = data.get('vm', lot.vm)
+        if 'harga_jual_pabrik' in data:
+            try:
+                lot.harga_jual_pabrik = Decimal(str(data.get('harga_jual_pabrik') or 0))
+            except Exception:
+                pass
         lot.save()
 
         if (old_nama != lot.nama_lot) or (old_pabrik != lot.pabrik):
             LogAktivitas.objects.create(user=editor, modul='Lot Pabrik', aksi='EDIT', keterangan=f"Ubah Info Lot: {old_nama} -> {lot.nama_lot} | Pabrik: {old_pabrik} -> {lot.pabrik}")
+        if old_harga_jual != lot.harga_jual_pabrik:
+            LogAktivitas.objects.create(user=editor, modul='Lot Pabrik', aksi='EDIT', keterangan=f"Ubah Harga Jual Dasar Pabrik Lot {lot.nama_lot}: Rp {float(old_harga_jual):,.0f} -> Rp {float(lot.harga_jual_pabrik):,.0f}")
             
         return JsonResponse({'status': 'sukses'})
 
@@ -1568,7 +1576,9 @@ def get_lot_detail(request, lot_id):
         # Rata-rata penyusutan LOT = total susut / total gudang (yang udah ditimbang pabrik)
         avg_penyusutan_pct = float((t_gudang_ditimbang - t_pabrik_ditimbang) / t_gudang_ditimbang * 100) if t_gudang_ditimbang > 0 else 0.0
         total_penyusutan_kg = float(t_gudang_ditimbang - t_pabrik_ditimbang)
-        return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': lot.bl or '-', 'vm': lot.vm or '-', 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_tonase_gudang_ditimbang': float(t_gudang_ditimbang), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal, 'avg_penyusutan_pct': avg_penyusutan_pct, 'total_penyusutan_kg': total_penyusutan_kg, 'shipments': items_data})
+        harga_jual_pabrik = float(lot.harga_jual_pabrik or 0)
+        untung_per_kg = (harga_jual_pabrik - harga_modal) if harga_jual_pabrik > 0 else 0.0
+        return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': lot.bl or '-', 'vm': lot.vm or '-', 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_tonase_gudang_ditimbang': float(t_gudang_ditimbang), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal, 'harga_jual_pabrik': harga_jual_pabrik, 'untung_per_kg': untung_per_kg, 'avg_penyusutan_pct': avg_penyusutan_pct, 'total_penyusutan_kg': total_penyusutan_kg, 'shipments': items_data})
     except LotPabrik.DoesNotExist: return JsonResponse({'status': 'error'}, status=404)
 
 @csrf_exempt

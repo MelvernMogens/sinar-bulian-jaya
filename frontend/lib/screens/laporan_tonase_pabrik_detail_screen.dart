@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart'; // <--- IMPORT SAKTI
@@ -49,7 +50,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
   }
 
   // Helper Input Dialog Sultan
-  Widget _buildDialogInput({required TextEditingController controller, required String hint, TextInputType type = TextInputType.text}) {
+  Widget _buildDialogInput({required TextEditingController controller, required String hint, TextInputType type = TextInputType.text, List<TextInputFormatter>? formatters, String prefix = ''}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -60,9 +61,12 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
       child: TextField(
         controller: controller,
         keyboardType: type,
+        inputFormatters: formatters,
         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         decoration: InputDecoration(
           labelText: hint,
+          prefixText: prefix.isEmpty ? null : prefix,
+          prefixStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
           labelStyle: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.normal, fontSize: 13),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -77,6 +81,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
     final pabrikCtrl = TextEditingController(text: data!['pabrik'] == '-' ? '' : data!['pabrik']);
     final blCtrl = TextEditingController(text: data!['bl'] == '-' ? '' : data!['bl']);
     final vmCtrl = TextEditingController(text: data!['vm'] == '-' ? '' : data!['vm']);
+    final hargaJualCtrl = TextEditingController(text: (double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['harga_jual_pabrik']) : '');
 
     showDialog(
       context: context,
@@ -97,6 +102,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                   _buildDialogInput(controller: pabrikCtrl, hint: 'Pabrik Tujuan'),
                   _buildDialogInput(controller: blCtrl, hint: 'No. BL'),
                   _buildDialogInput(controller: vmCtrl, hint: 'No. VM'),
+                  _buildDialogInput(controller: hargaJualCtrl, hint: 'Harga Jual Dasar Pabrik /Kg', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
                 ],
               ),
             ),
@@ -123,8 +129,9 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                         'lot_id': widget.lotId.toString(), 
                         'nama_lot': namaCtrl.text, 
                         'pabrik': pabrikCtrl.text, 
-                        'bl': blCtrl.text, 
+                        'bl': blCtrl.text,
                         'vm': vmCtrl.text,
+                        'harga_jual_pabrik': hargaJualCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
                         'username': currentUsername, // <--- KIRIM KE DJANGO
                       })
                     );
@@ -285,15 +292,15 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
   }
 
   // Helper Widget Info Pabrik
-  Widget _buildInfoRow(String label, String value, IconData icon) {
+  Widget _buildInfoRow(String label, String value, IconData icon, {Color? valueColor, Color? iconColor}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.teal.shade600),
+          Icon(icon, size: 16, color: iconColor ?? Colors.teal.shade600),
           const SizedBox(width: 8),
           Expanded(child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w600))),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.black87)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: valueColor ?? Colors.black87)),
         ],
       ),
     );
@@ -420,6 +427,27 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                     _buildInfoRow('No. VM', data!['vm'] ?? '-', Icons.confirmation_number_rounded),
                                     Divider(height: 16, color: Colors.grey.shade200),
                                     _buildPenyusutanRow(),
+                                    Divider(height: 16, color: Colors.grey.shade200),
+                                    _buildInfoRow(
+                                      'Harga Jual Dasar Pabrik',
+                                      (double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0 ? '${_formatUangAman(data!['harga_jual_pabrik'])} /Kg' : 'Belum diisi',
+                                      Icons.sell_rounded,
+                                      valueColor: (double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0 ? Colors.black87 : Colors.grey.shade400,
+                                    ),
+                                    if ((double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0) ...[
+                                      Divider(height: 16, color: Colors.grey.shade200),
+                                      Builder(builder: (_) {
+                                        final double untung = double.tryParse('${data!['untung_per_kg'] ?? 0}') ?? 0;
+                                        final bool plus = untung >= 0;
+                                        return _buildInfoRow(
+                                          'Estimasi Untung /Kg',
+                                          '${plus ? '+' : '-'}${_formatUangAman(untung.abs())} /Kg',
+                                          plus ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                                          valueColor: plus ? Colors.green.shade700 : Colors.red.shade600,
+                                          iconColor: plus ? Colors.green.shade700 : Colors.red.shade600,
+                                        );
+                                      }),
+                                    ],
                                   ],
                                 ),
                               )
