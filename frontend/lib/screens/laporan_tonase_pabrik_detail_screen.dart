@@ -270,21 +270,25 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
     return formatRp(parsed);
   }
 
-  // Rata-rata penyusutan LOT (value warna oranye karena ini "kehilangan")
+  // Rata-rata penyusutan LOT. Konvensi: naik (pabrik > gudang) = plus/hijau,
+  // turun/susut (pabrik < gudang) = minus/oranye.
   Widget _buildPenyusutanRow() {
     final double pct = double.tryParse('${data!['avg_penyusutan_pct'] ?? 0}') ?? 0;
     final double kg = double.tryParse('${data!['total_penyusutan_kg'] ?? 0}') ?? 0;
     final bool ada = pct != 0 || kg != 0;
+    final bool naik = kg > 0;
+    final MaterialColor base = !ada ? Colors.grey : (naik ? Colors.green : Colors.orange);
+    final String sign = kg > 0 ? '+' : '';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(Icons.trending_down_rounded, size: 16, color: Colors.orange.shade700),
+          Icon(naik ? Icons.trending_up_rounded : Icons.trending_down_rounded, size: 16, color: base.shade700),
           const SizedBox(width: 8),
           Expanded(child: Text('Rata-rata Penyusutan', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w600))),
           Text(
-            ada ? '${pct.toStringAsFixed(2)}%  (${formatTonase(kg)} Kg)' : 'Belum ditimbang',
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: ada ? Colors.orange.shade800 : Colors.grey.shade400),
+            ada ? '$sign${pct.toStringAsFixed(2)}%  ($sign${formatTonase(kg)} Kg)' : 'Belum ditimbang',
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: ada ? base.shade800 : Colors.grey.shade400),
           ),
         ],
       ),
@@ -566,28 +570,35 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                             ),
                                           ],
                                         ),
-                                        // --- PENYUSUTAN PER MOBIL ---
+                                        // --- PENYUSUTAN PER MOBIL (naik = +/hijau, turun = -/oranye) ---
                                         if (!belumTimbang) ...[
                                           const SizedBox(height: 12),
-                                          Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: Colors.orange.shade50,
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(color: Colors.orange.shade100),
-                                            ),
-                                            child: Row(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Icon(Icons.trending_down_rounded, size: 14, color: Colors.orange.shade800),
-                                                const SizedBox(width: 6),
-                                                Text('Penyusutan: ', style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w700)),
-                                                Text('${(double.tryParse('${s['penyusutan_pct'] ?? 0}') ?? 0).toStringAsFixed(2)}%', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w900)),
-                                                Text('  (${formatTonase(s['penyusutan_kg'] ?? 0)} Kg)', style: TextStyle(fontSize: 11, color: Colors.orange.shade800, fontWeight: FontWeight.w600)),
-                                              ],
-                                            ),
-                                          ),
+                                          Builder(builder: (_) {
+                                            final double pPct = double.tryParse('${s['penyusutan_pct'] ?? 0}') ?? 0;
+                                            final double pKg = double.tryParse('${s['penyusutan_kg'] ?? 0}') ?? 0;
+                                            final bool naik = pKg > 0;
+                                            final MaterialColor base = pKg == 0 ? Colors.grey : (naik ? Colors.green : Colors.orange);
+                                            final String sign = pKg > 0 ? '+' : '';
+                                            return Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: base.shade50,
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(color: base.shade100),
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(naik ? Icons.trending_up_rounded : Icons.trending_down_rounded, size: 14, color: base.shade800),
+                                                  const SizedBox(width: 6),
+                                                  Text('Penyusutan: ', style: TextStyle(fontSize: 12, color: base.shade900, fontWeight: FontWeight.w700)),
+                                                  Text('$sign${pPct.toStringAsFixed(2)}%', style: TextStyle(fontSize: 13, color: base.shade900, fontWeight: FontWeight.w900)),
+                                                  Text('  ($sign${formatTonase(pKg)} Kg)', style: TextStyle(fontSize: 11, color: base.shade800, fontWeight: FontWeight.w600)),
+                                                ],
+                                              ),
+                                            );
+                                          }),
                                         ],
                                       ],
                                     ),
