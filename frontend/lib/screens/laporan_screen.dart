@@ -707,7 +707,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                         children: [
                           Icon(Icons.scale_rounded, size: 12, color: Colors.grey.shade600),
                           const SizedBox(width: 4),
-                          Text('${totalBerat.toStringAsFixed(0)} Kg', style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w700)),
+                          Text('${formatTonase(totalBerat)} Kg', style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w700)),
                           const SizedBox(width: 12),
                           Container(width: 1, height: 10, color: Colors.grey.shade300),
                           const SizedBox(width: 12),
@@ -881,7 +881,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                     ]),
                   ],
                   const SizedBox(height: 6),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Berat', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('${berat.toStringAsFixed(1)} Kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Berat', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('${formatTonase(berat)} Kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
                   const SizedBox(height: 6),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Harga/Kg', style: TextStyle(fontSize: 12, color: Colors.black54)), Text(formatRp(harga), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
 
@@ -1188,7 +1188,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('No. Nota', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('#${t['id']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
                   const SizedBox(height: 6),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Berat', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('${berat.toStringAsFixed(1)} Kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Berat', style: TextStyle(fontSize: 12, color: Colors.black54)), Text('${formatTonase(berat)} Kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
                   const SizedBox(height: 6),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Harga/Kg', style: TextStyle(fontSize: 12, color: Colors.black54)), Text(formatRp(harga), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]),
                   

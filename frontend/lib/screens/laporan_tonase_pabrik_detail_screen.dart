@@ -318,6 +318,10 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
             Container(width: 4, height: 16, decoration: BoxDecoration(color: Colors.teal.shade700, borderRadius: BorderRadius.circular(2))),
             const SizedBox(width: 8),
             const Text('ANALISA HARGA & DRC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1.2)),
+            const Spacer(),
+            Icon(Icons.edit_rounded, size: 13, color: Colors.teal.shade600),
+            const SizedBox(width: 4),
+            Text('Ketuk untuk Edit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.teal.shade700)),
           ]),
           const SizedBox(height: 12),
           _buildInfoRow('Harga Jual Dasar Pabrik', adaJual ? '${_formatUangAman(hargaJual)} /Kg' : 'Belum diisi', Icons.sell_rounded, valueColor: adaJual ? Colors.black87 : Colors.grey.shade400),
@@ -392,23 +396,14 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                         ),
                       ],
                     ),
-                    PopupMenuButton<String>(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      offset: const Offset(0, 40),
-                      icon: Container(
+                    InkWell(
+                      onTap: konfirmasiHapusLot,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))]),
-                        child: Icon(Icons.more_horiz_rounded, color: Colors.teal.shade800, size: 20),
+                        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))]),
+                        child: Icon(Icons.delete_outline_rounded, color: Colors.red.shade600, size: 20),
                       ),
-                      onSelected: (value) {
-                        if (value == 'edit') dialogEditInfoLot();
-                        if (value == 'hapus') konfirmasiHapusLot();
-                      },
-                      itemBuilder: (context) => [
-                        PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, color: Colors.blue.shade600, size: 18), const SizedBox(width: 12), const Text('Edit Info Lot', style: TextStyle(fontWeight: FontWeight.w600))])),
-                        PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_rounded, color: Colors.red.shade600, size: 18), const SizedBox(width: 12), const Text('Hapus Lot', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red))])),
-                      ],
                     )
                   ],
                 ),
@@ -469,20 +464,35 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                               ),
                               const SizedBox(height: 20),
                               
-                              // INFO PABRIK & BL DI DALAM KARTU
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-                                child: Column(
-                                  children: [
-                                    _buildInfoRow('Pabrik Tujuan', data!['pabrik'] ?? '-', Icons.domain_rounded),
-                                    Divider(height: 16, color: Colors.grey.shade200),
-                                    _buildInfoRow('No. BL', data!['bl'] ?? '-', Icons.receipt_long_rounded),
-                                    Divider(height: 16, color: Colors.grey.shade200),
-                                    _buildInfoRow('No. VM', data!['vm'] ?? '-', Icons.confirmation_number_rounded),
-                                    Divider(height: 16, color: Colors.grey.shade200),
-                                    _buildPenyusutanRow(),
-                                  ],
+                              // INFO PABRIK & BL DI DALAM KARTU (tap untuk edit)
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: dialogEditInfoLot,
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                                    child: Column(
+                                      children: [
+                                        Row(children: [
+                                          const Text('INFO LOT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                                          const Spacer(),
+                                          Icon(Icons.edit_rounded, size: 13, color: Colors.teal.shade600),
+                                          const SizedBox(width: 4),
+                                          Text('Ketuk untuk Edit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.teal.shade700)),
+                                        ]),
+                                        Divider(height: 14, color: Colors.grey.shade200),
+                                        _buildInfoRow('Pabrik Tujuan', data!['pabrik'] ?? '-', Icons.domain_rounded),
+                                        Divider(height: 16, color: Colors.grey.shade200),
+                                        _buildInfoRow('No. BL', data!['bl'] ?? '-', Icons.receipt_long_rounded),
+                                        Divider(height: 16, color: Colors.grey.shade200),
+                                        _buildInfoRow('No. VM', data!['vm'] ?? '-', Icons.confirmation_number_rounded),
+                                        Divider(height: 16, color: Colors.grey.shade200),
+                                        _buildPenyusutanRow(),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               )
                             ],
@@ -491,8 +501,15 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
 
                         const SizedBox(height: 20),
 
-                        // --- KARTU ANALISA HARGA & DRC ---
-                        _buildAnalisaHargaCard(),
+                        // --- KARTU ANALISA HARGA & DRC (tap untuk edit harga jual) ---
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: dialogEditInfoLot,
+                            borderRadius: BorderRadius.circular(20),
+                            child: _buildAnalisaHargaCard(),
+                          ),
+                        ),
 
                         const SizedBox(height: 36),
                         

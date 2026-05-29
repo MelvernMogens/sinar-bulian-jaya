@@ -303,7 +303,7 @@ class _LaporanTonasePabrikScreenState extends State<LaporanTonasePabrikScreen> {
                                                       children: [
                                                         Icon(Icons.payments_rounded, size: 16, color: Colors.amber.shade800),
                                                         const SizedBox(width: 6),
-                                                        Text('Modal Asli/Kg', style: TextStyle(color: Colors.amber.shade900, fontSize: 12, fontWeight: FontWeight.w600)),
+                                                        Text('Modal Pabrik/Kg', style: TextStyle(color: Colors.amber.shade900, fontSize: 12, fontWeight: FontWeight.w600)),
                                                       ],
                                                     ),
                                                     Text(formatRp(l['harga_modal'] ?? 0), style: TextStyle(color: Colors.amber.shade900, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -0.5)),

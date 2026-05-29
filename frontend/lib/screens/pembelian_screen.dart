@@ -842,7 +842,7 @@ class _FormNotaScreenState extends State<FormNotaScreen> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text('${item['tonase']} Kg x ${formatRp(item['harga'])}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isSelected ? Colors.teal.shade900 : Colors.black87)),
+                                            Text('${formatTonase(item['tonase'])} Kg x ${formatRp(item['harga'])}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isSelected ? Colors.teal.shade900 : Colors.black87)),
                                             const SizedBox(height: 4),
                                             Text('Posisi: ${item['sumber']}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                                           ],
