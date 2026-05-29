@@ -6,6 +6,8 @@ from django.contrib.auth.models import User # <-- IMPORT USER BAWAAN DJANGO
 
 class Pelanggan(models.Model):
     nama = models.CharField(max_length=100)
+    no_telp = models.CharField(max_length=30, blank=True, null=True)
+    no_rekening = models.CharField(max_length=60, blank=True, null=True)
     saldo_mengendap = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_kasbon = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)

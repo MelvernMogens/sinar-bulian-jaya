@@ -104,7 +104,7 @@ def list_log_aktivitas(request):
 
 
 def list_pelanggan(request):
-    data = list(Pelanggan.objects.values('id', 'nama', 'saldo_mengendap', 'total_kasbon').order_by('-id'))
+    data = list(Pelanggan.objects.values('id', 'nama', 'no_telp', 'no_rekening', 'saldo_mengendap', 'total_kasbon').order_by('-id'))
     return JsonResponse(data, safe=False)
 
 @csrf_exempt
@@ -114,6 +114,8 @@ def tambah_pelanggan(request):
     try:
         data = json.loads(request.body)
         nama = (data.get('nama') or '').strip()
+        no_telp = (data.get('no_telp') or '').strip() or None
+        no_rekening = (data.get('no_rekening') or '').strip() or None
         if not nama:
             return JsonResponse({'status': 'gagal', 'pesan': 'Nama petani wajib diisi.'}, status=400)
         if len(nama) > 100:
@@ -121,10 +123,43 @@ def tambah_pelanggan(request):
         # Cek duplikasi nama (case-insensitive)
         if Pelanggan.objects.filter(nama__iexact=nama).exists():
             return JsonResponse({'status': 'gagal', 'pesan': f'Petani "{nama}" sudah terdaftar.'}, status=400)
-        Pelanggan.objects.create(nama=nama)
+        Pelanggan.objects.create(nama=nama, no_telp=no_telp, no_rekening=no_rekening)
         return JsonResponse({'status': 'sukses', 'pesan': f'Petani {nama} ditambahkan.'})
     except json.JSONDecodeError:
         return JsonResponse({'status': 'gagal', 'pesan': 'Format request tidak valid.'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
+
+@csrf_exempt
+def edit_pelanggan(request):
+    """Edit info petani: nama, no_telp, no_rekening (telp & rekening opsional)."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'gagal', 'pesan': 'Method tidak didukung.'}, status=405)
+    try:
+        data = json.loads(request.body)
+        pelanggan = Pelanggan.objects.get(id=data.get('pelanggan_id'))
+        nama_baru = (data.get('nama') or '').strip()
+        if not nama_baru:
+            return JsonResponse({'status': 'gagal', 'pesan': 'Nama tidak boleh kosong.'}, status=400)
+        # Cek duplikat nama (exclude diri sendiri)
+        if Pelanggan.objects.filter(nama__iexact=nama_baru).exclude(id=pelanggan.id).exists():
+            return JsonResponse({'status': 'gagal', 'pesan': f'Nama "{nama_baru}" sudah dipakai petani lain.'}, status=400)
+
+        old_info = f"{pelanggan.nama} / {pelanggan.no_telp or '-'} / {pelanggan.no_rekening or '-'}"
+        pelanggan.nama = nama_baru
+        pelanggan.no_telp = (data.get('no_telp') or '').strip() or None
+        pelanggan.no_rekening = (data.get('no_rekening') or '').strip() or None
+        pelanggan.save()
+
+        username = data.get('username')
+        editor = User.objects.filter(username=username).first() if username else None
+        if editor:
+            new_info = f"{pelanggan.nama} / {pelanggan.no_telp or '-'} / {pelanggan.no_rekening or '-'}"
+            LogAktivitas.objects.create(user=editor, modul='Pelanggan', aksi='EDIT', keterangan=f"Edit info petani: [{old_info}] -> [{new_info}]")
+
+        return JsonResponse({'status': 'sukses', 'pesan': 'Info petani diperbarui.'})
+    except Pelanggan.DoesNotExist:
+        return JsonResponse({'status': 'gagal', 'pesan': 'Petani tidak ditemukan.'}, status=404)
     except Exception as e:
         return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
 
@@ -423,6 +458,8 @@ def history_kasbon_pelanggan(request, pelanggan_id):
         'pelanggan': {
             'id': pelanggan.id,
             'nama': pelanggan.nama,
+            'no_telp': pelanggan.no_telp or '',
+            'no_rekening': pelanggan.no_rekening or '',
             'total_kasbon_saat_ini': float(pelanggan.total_kasbon),
             'saldo_mengendap': float(pelanggan.saldo_mengendap),
         },
@@ -473,15 +510,24 @@ def list_tanggungan(request):
         pemb_bb = Pembayaran.objects.filter(nota=n, metode='BB').first()
         nominal_bb = pemb_bb.nominal if pemb_bb else n.total_bersih
         data_bb.append({
-            'id': n.id, 
-            'nama': n.pelanggan.nama, 
-            'total': float(nominal_bb), 
+            'id': n.id,
+            'nama': n.pelanggan.nama,
+            'no_telp': n.pelanggan.no_telp or '',
+            'no_rekening': n.pelanggan.no_rekening or '',
+            'total': float(nominal_bb),
             'tgl': n.tanggal.strftime('%d-%m-%Y')
         })
-        
+
     tf = Pembayaran.objects.filter(metode='TRANSFER', is_selesai=False).select_related('nota__pelanggan').order_by('tanggal_bayar')
-    data_tf = [{'id': p.id, 'nama': p.nota.pelanggan.nama, 'nominal': float(p.nominal), 'tgl_tf': p.tanggal_bayar.strftime('%d-%m-%Y')} for p in tf]
-    
+    data_tf = [{
+        'id': p.id,
+        'nama': p.nota.pelanggan.nama,
+        'no_telp': p.nota.pelanggan.no_telp or '',
+        'no_rekening': p.nota.pelanggan.no_rekening or '',
+        'nominal': float(p.nominal),
+        'tgl_tf': p.tanggal_bayar.strftime('%d-%m-%Y')
+    } for p in tf]
+
     return JsonResponse({'bb': data_bb, 'tf': data_tf})
 
 @csrf_exempt
