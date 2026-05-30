@@ -132,13 +132,6 @@ class LotPabrik(models.Model):
     gilingan_basah = models.DecimalField(max_digits=15, decimal_places=2, default=0)   # input manual -> BL = tonase pabrik / gilingan basah
     gilingan_kering = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # input manual -> VM = gilingan kering / BL
     harga_jual_pabrik = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # harga jual dasar dari pabrik per kg
-    # --- Settlement Pabrik (buat hitung Net Gain/Loss bersih) ---
-    hitungan_abp = models.DecimalField(max_digits=18, decimal_places=2, default=0)   # nilai final dari pabrik (input dari invoice)
-    denda_pph = models.DecimalField(max_digits=15, decimal_places=2, default=0)      # denda PPh 22 (kalau ada)
-    ppn = models.DecimalField(max_digits=15, decimal_places=2, default=0)            # PPN
-    obm = models.DecimalField(max_digits=15, decimal_places=2, default=0)            # ongkos bongkar muat
-    materai = models.DecimalField(max_digits=10, decimal_places=2, default=10000)    # default 10000
-    potongan_lain = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # catch-all potongan lain
     is_selesai = models.BooleanField(default=False)
 
     @property
