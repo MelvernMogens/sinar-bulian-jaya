@@ -1536,6 +1536,11 @@ def edit_lot(request):
         if 'gilingan_kering' in data:
             try: lot.gilingan_kering = Decimal(str(data.get('gilingan_kering') or 0))
             except Exception: pass
+        # Settlement Pabrik (buat hitung Net Gain/Loss bersih)
+        for f in ['hitungan_abp', 'denda_pph', 'ppn', 'obm', 'materai', 'potongan_lain']:
+            if f in data:
+                try: setattr(lot, f, Decimal(str(data.get(f) or 0)))
+                except Exception: pass
         lot.save()
 
         if (old_nama != lot.nama_lot) or (old_pabrik != lot.pabrik):
@@ -1598,7 +1603,19 @@ def get_lot_detail(request, lot_id):
         vm_val = (gilingan_kering / gilingan_basah * 100) if (gilingan_basah > 0 and gilingan_kering > 0) else 0.0
         # DRC Actual = BL * VM * 100 (pakai bentuk desimal) = bl_val * vm_val / 100 -> persentase
         drc_actual = (bl_val * vm_val / 100) if (bl_val > 0 and vm_val > 0) else 0.0
-        return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': bl_val, 'vm': vm_val, 'drc_actual': drc_actual, 'gilingan_basah': gilingan_basah, 'gilingan_kering': gilingan_kering, 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_tonase_gudang': float(t_tonase_gudang_lot), 'total_tonase_gudang_ditimbang': float(t_gudang_ditimbang), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal_pabrik, 'harga_modal_pabrik': harga_modal_pabrik, 'harga_modal_gudang': harga_modal_gudang, 'harga_jual_pabrik': harga_jual_pabrik, 'drc_gudang': drc_gudang, 'drc_pabrik': drc_pabrik, 'avg_penyusutan_pct': avg_penyusutan_pct, 'total_penyusutan_kg': total_penyusutan_kg, 'shipments': items_data})
+        # --- Settlement Pabrik (Net Gain/Loss bersih) ---
+        hitungan_abp = float(lot.hitungan_abp or 0)
+        denda_pph = float(lot.denda_pph or 0)
+        ppn = float(lot.ppn or 0)
+        obm = float(lot.obm or 0)
+        materai = float(lot.materai or 0)
+        potongan_lain = float(lot.potongan_lain or 0)
+        pph22 = hitungan_abp * 0.0025  # 0.25% otomatis
+        invoice = hitungan_abp - pph22 - denda_pph  # nilai tagihan setelah pajak
+        modal = float(t_uang_lot)
+        gain_loss_kotor = (hitungan_abp - modal) if hitungan_abp > 0 else 0.0
+        gain_loss_bersih = (hitungan_abp - modal - pph22 - denda_pph - ppn - obm - materai - potongan_lain) if hitungan_abp > 0 else 0.0
+        return JsonResponse({'id': lot.id, 'nama_lot': lot.nama_lot, 'pabrik': lot.pabrik or '-', 'bl': bl_val, 'vm': vm_val, 'drc_actual': drc_actual, 'gilingan_basah': gilingan_basah, 'gilingan_kering': gilingan_kering, 'is_selesai': lot.is_selesai, 'total_tonase_pabrik': float(t_tonase_pabrik_lot), 'total_tonase_gudang': float(t_tonase_gudang_lot), 'total_tonase_gudang_ditimbang': float(t_gudang_ditimbang), 'total_uang_gudang': float(t_uang_lot), 'harga_modal': harga_modal_pabrik, 'harga_modal_pabrik': harga_modal_pabrik, 'harga_modal_gudang': harga_modal_gudang, 'harga_jual_pabrik': harga_jual_pabrik, 'drc_gudang': drc_gudang, 'drc_pabrik': drc_pabrik, 'avg_penyusutan_pct': avg_penyusutan_pct, 'total_penyusutan_kg': total_penyusutan_kg, 'hitungan_abp': hitungan_abp, 'pph22': pph22, 'denda_pph': denda_pph, 'ppn': ppn, 'obm': obm, 'materai': materai, 'potongan_lain': potongan_lain, 'invoice': invoice, 'gain_loss_kotor': gain_loss_kotor, 'gain_loss_bersih': gain_loss_bersih, 'shipments': items_data})
     except LotPabrik.DoesNotExist: return JsonResponse({'status': 'error'}, status=404)
 
 @csrf_exempt

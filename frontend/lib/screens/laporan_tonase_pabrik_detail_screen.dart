@@ -89,6 +89,13 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
     final gilinganBasahCtrl = TextEditingController(text: _numInit(data!['gilingan_basah']));
     final gilinganKeringCtrl = TextEditingController(text: _numInit(data!['gilingan_kering']));
     final hargaJualCtrl = TextEditingController(text: (double.tryParse('${data!['harga_jual_pabrik'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['harga_jual_pabrik']) : '');
+    // Settlement Pabrik
+    final hitunganCtrl = TextEditingController(text: (double.tryParse('${data!['hitungan_abp'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['hitungan_abp']) : '');
+    final dendaCtrl = TextEditingController(text: (double.tryParse('${data!['denda_pph'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['denda_pph']) : '');
+    final ppnCtrl = TextEditingController(text: (double.tryParse('${data!['ppn'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['ppn']) : '');
+    final obmCtrl = TextEditingController(text: (double.tryParse('${data!['obm'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['obm']) : '');
+    final materaiCtrl = TextEditingController(text: (double.tryParse('${data!['materai'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['materai']) : '');
+    final potonganLainCtrl = TextEditingController(text: (double.tryParse('${data!['potongan_lain'] ?? 0}') ?? 0) > 0 ? formatRibuan(data!['potongan_lain']) : '');
 
     showDialog(
       context: context,
@@ -110,6 +117,18 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                   _buildDialogInput(controller: gilinganBasahCtrl, hint: 'Gilingan Pabrik Basah (→ BL)', type: const TextInputType.numberWithOptions(decimal: true)),
                   _buildDialogInput(controller: gilinganKeringCtrl, hint: 'Gilingan Pabrik Kering (→ VM)', type: const TextInputType.numberWithOptions(decimal: true)),
                   _buildDialogInput(controller: hargaJualCtrl, hint: 'Harga Jual Dasar Pabrik /Kg', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
+                  // --- Settlement Pabrik ---
+                  Padding(padding: const EdgeInsets.only(top: 6, bottom: 4), child: Row(children: [
+                    Container(width: 3, height: 12, decoration: BoxDecoration(color: Colors.teal.shade700, borderRadius: BorderRadius.circular(2))),
+                    const SizedBox(width: 6),
+                    const Text('SETTLEMENT PABRIK', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1.2)),
+                  ])),
+                  _buildDialogInput(controller: hitunganCtrl, hint: 'Hitungan ABP (dari invoice pabrik)', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
+                  _buildDialogInput(controller: dendaCtrl, hint: 'Denda PPh 22 (kalau ada)', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
+                  _buildDialogInput(controller: ppnCtrl, hint: 'PPN', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
+                  _buildDialogInput(controller: obmCtrl, hint: 'OBM (Ongkos Bongkar Muat)', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
+                  _buildDialogInput(controller: materaiCtrl, hint: 'Materai', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
+                  _buildDialogInput(controller: potonganLainCtrl, hint: 'Potongan Lain', type: const TextInputType.numberWithOptions(decimal: false), formatters: [RibuanFormatter()], prefix: 'Rp '),
                 ],
               ),
             ),
@@ -139,6 +158,12 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                         'gilingan_basah': gilinganBasahCtrl.text.replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.]'), ''),
                         'gilingan_kering': gilinganKeringCtrl.text.replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.]'), ''),
                         'harga_jual_pabrik': hargaJualCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+                        'hitungan_abp': hitunganCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+                        'denda_pph': dendaCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+                        'ppn': ppnCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+                        'obm': obmCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+                        'materai': materaiCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+                        'potongan_lain': potonganLainCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
                         'username': currentUsername, // <--- KIRIM KE DJANGO
                       })
                     );
@@ -302,10 +327,50 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
     );
   }
 
-  // Indikator Gain/Loss = DRC Actual - DRC Pabrik (plus = gain/hijau, minus = loss/merah)
+  // Indikator Gain/Loss di atas. Prioritas:
+  // 1. Kalau Hitungan ABP udah diisi -> Net Gain/Loss BERSIH Rupiah (setelah semua potongan)
+  // 2. Kalau gilingan + harga jual diisi -> selisih DRC (%)
+  // 3. Selainnya -> banner abu-abu ngingetin
   Widget _buildGainLossBanner() {
+    final double hitungan = double.tryParse('${data!['hitungan_abp'] ?? 0}') ?? 0;
     final double drcAct = double.tryParse('${data!['drc_actual'] ?? 0}') ?? 0;
     final double drcPab = double.tryParse('${data!['drc_pabrik'] ?? 0}') ?? 0;
+
+    // --- Mode Rupiah (settlement udah diisi) ---
+    if (hitungan > 0) {
+      final double net = double.tryParse('${data!['gain_loss_bersih'] ?? 0}') ?? 0;
+      final bool gain = net >= 0;
+      final Color c = gain ? Colors.green : Colors.red;
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gain ? [Colors.green.shade600, Colors.green.shade400] : [Colors.red.shade600, Colors.red.shade400],
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [BoxShadow(color: c.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 6))],
+        ),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+            child: Icon(gain ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(gain ? 'NET GAIN' : 'NET LOSS', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 1)),
+            const SizedBox(height: 2),
+            const Text('Setelah semua potongan (PPh, denda, OBM, materai, dll)', style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 10.5, fontWeight: FontWeight.w600)),
+          ])),
+          Text('${gain ? '+' : '−'}${_formatUangAman(net.abs())}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17, letterSpacing: -0.5)),
+        ]),
+      );
+    }
+
+    // --- Mode DRC % (fallback) ---
     if (drcAct <= 0 || drcPab <= 0) {
       return Container(
         width: double.infinity,
@@ -315,7 +380,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
         child: Row(children: [
           Icon(Icons.info_outline_rounded, size: 16, color: Colors.grey.shade500),
           const SizedBox(width: 8),
-          Expanded(child: Text('Isi Gilingan (basah & kering) + Harga Jual Dasar Pabrik buat lihat Gain/Loss.', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w600))),
+          Expanded(child: Text('Isi Gilingan + Harga Jual buat lihat Gain/Loss %. Isi Hitungan ABP buat Net Gain/Loss Rupiah.', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w600))),
         ]),
       );
     }
@@ -398,6 +463,94 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                 Icon(Icons.info_outline_rounded, size: 14, color: Colors.amber.shade800),
                 const SizedBox(width: 6),
                 Expanded(child: Text('Isi "Harga Jual Dasar Pabrik" lewat Edit Info Lot buat lihat DRC.', style: TextStyle(fontSize: 11, color: Colors.amber.shade900, fontWeight: FontWeight.w600))),
+              ]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Kartu Settlement Pabrik (Hitungan ABP + potongan -> Net Gain/Loss bersih)
+  Widget _buildSettlementCard() {
+    final double hitungan = double.tryParse('${data!['hitungan_abp'] ?? 0}') ?? 0;
+    final double pph22 = double.tryParse('${data!['pph22'] ?? 0}') ?? 0;
+    final double denda = double.tryParse('${data!['denda_pph'] ?? 0}') ?? 0;
+    final double ppn = double.tryParse('${data!['ppn'] ?? 0}') ?? 0;
+    final double obm = double.tryParse('${data!['obm'] ?? 0}') ?? 0;
+    final double materai = double.tryParse('${data!['materai'] ?? 0}') ?? 0;
+    final double potonganLain = double.tryParse('${data!['potongan_lain'] ?? 0}') ?? 0;
+    final double invoice = double.tryParse('${data!['invoice'] ?? 0}') ?? 0;
+    final double modal = double.tryParse('${data!['total_uang_gudang'] ?? 0}') ?? 0;
+    final double gainKotor = double.tryParse('${data!['gain_loss_kotor'] ?? 0}') ?? 0;
+    final double gainBersih = double.tryParse('${data!['gain_loss_bersih'] ?? 0}') ?? 0;
+    final bool adaSettlement = hitungan > 0;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(width: 4, height: 16, decoration: BoxDecoration(color: Colors.teal.shade700, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 8),
+            const Text('SETTLEMENT PABRIK', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1.2)),
+            const Spacer(),
+            Icon(Icons.edit_rounded, size: 13, color: Colors.teal.shade600),
+            const SizedBox(width: 4),
+            Text('Ketuk untuk Edit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.teal.shade700)),
+          ]),
+          const SizedBox(height: 12),
+          if (!adaSettlement)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.shade100)),
+              child: Row(children: [
+                Icon(Icons.info_outline_rounded, size: 14, color: Colors.amber.shade800),
+                const SizedBox(width: 6),
+                Expanded(child: Text('Belum diisi. Isi Hitungan ABP & potongan biar Net Gain/Loss keitung.', style: TextStyle(fontSize: 11, color: Colors.amber.shade900, fontWeight: FontWeight.w600))),
+              ]),
+            )
+          else ...[
+            _buildInfoRow('Hitungan ABP', _formatUangAman(hitungan), Icons.receipt_long_rounded, valueColor: Colors.black87),
+            Divider(height: 16, color: Colors.grey.shade200),
+            _buildInfoRow('PPh 22 (otomatis 0,25%)', '− ${_formatUangAman(pph22)}', Icons.percent_rounded, valueColor: Colors.red.shade600, iconColor: Colors.red.shade400),
+            if (denda > 0) ...[Divider(height: 16, color: Colors.grey.shade200), _buildInfoRow('Denda PPh', '− ${_formatUangAman(denda)}', Icons.gavel_rounded, valueColor: Colors.red.shade600, iconColor: Colors.red.shade400)],
+            if (ppn > 0) ...[Divider(height: 16, color: Colors.grey.shade200), _buildInfoRow('PPN', '− ${_formatUangAman(ppn)}', Icons.account_balance_rounded, valueColor: Colors.red.shade600, iconColor: Colors.red.shade400)],
+            if (obm > 0) ...[Divider(height: 16, color: Colors.grey.shade200), _buildInfoRow('OBM', '− ${_formatUangAman(obm)}', Icons.local_shipping_rounded, valueColor: Colors.red.shade600, iconColor: Colors.red.shade400)],
+            if (materai > 0) ...[Divider(height: 16, color: Colors.grey.shade200), _buildInfoRow('Materai', '− ${_formatUangAman(materai)}', Icons.confirmation_number_rounded, valueColor: Colors.red.shade600, iconColor: Colors.red.shade400)],
+            if (potonganLain > 0) ...[Divider(height: 16, color: Colors.grey.shade200), _buildInfoRow('Potongan Lain', '− ${_formatUangAman(potonganLain)}', Icons.remove_circle_outline_rounded, valueColor: Colors.red.shade600, iconColor: Colors.red.shade400)],
+            const SizedBox(height: 8),
+            Container(height: 1, color: Colors.grey.shade300),
+            const SizedBox(height: 6),
+            _buildInfoRow('Invoice (Hitungan − PPh − Denda)', _formatUangAman(invoice), Icons.description_rounded, valueColor: Colors.blue.shade700, iconColor: Colors.blue.shade700),
+            Divider(height: 16, color: Colors.grey.shade200),
+            _buildInfoRow('Modal Bokap', _formatUangAman(modal), Icons.payments_rounded),
+            Divider(height: 16, color: Colors.grey.shade200),
+            _buildInfoRow('Gain/Loss Kotor', '${gainKotor >= 0 ? '+' : '−'}${_formatUangAman(gainKotor.abs())}', Icons.show_chart_rounded, valueColor: gainKotor >= 0 ? Colors.green.shade700 : Colors.red.shade600, iconColor: gainKotor >= 0 ? Colors.green.shade700 : Colors.red.shade600),
+            const SizedBox(height: 12),
+            // Net Gain/Loss prominent
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: gainBersih >= 0 ? [Colors.green.shade600, Colors.green.shade400] : [Colors.red.shade600, Colors.red.shade400],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(color: (gainBersih >= 0 ? Colors.green : Colors.red).withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: Row(children: [
+                Icon(gainBersih >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: Colors.white, size: 22),
+                const SizedBox(width: 10),
+                const Expanded(child: Text('NET GAIN/LOSS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1))),
+                Text('${gainBersih >= 0 ? '+' : '−'}${_formatUangAman(gainBersih.abs())}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.5)),
               ]),
             ),
           ],
@@ -572,6 +725,18 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                             onTap: dialogEditInfoLot,
                             borderRadius: BorderRadius.circular(20),
                             child: _buildAnalisaHargaCard(),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // --- KARTU SETTLEMENT PABRIK (tap untuk edit) ---
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: dialogEditInfoLot,
+                            borderRadius: BorderRadius.circular(20),
+                            child: _buildSettlementCard(),
                           ),
                         ),
 
