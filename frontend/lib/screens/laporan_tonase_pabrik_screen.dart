@@ -26,7 +26,8 @@ class _LaporanTonasePabrikScreenState extends State<LaporanTonasePabrikScreen> {
       if (res.statusCode == 200) {
         setState(() {
           lots = json.decode(res.body);
-          filteredLots = lots; 
+          _sortByLotNumber(lots);
+          filteredLots = lots;
         });
       }
     } catch (e) {
@@ -39,6 +40,17 @@ class _LaporanTonasePabrikScreenState extends State<LaporanTonasePabrikScreen> {
       });
       }
     }
+  }
+
+  // Ekstrak nomor dari nama LOT (mis. "LOT 81" -> 81, "Lot 1" -> 1). Default 0 kalau ga ada angka.
+  int _extractLotNumber(Map lot) {
+    final match = RegExp(r'\d+').firstMatch(lot['nama_lot'].toString());
+    return match != null ? (int.tryParse(match.group(0)!) ?? 0) : 0;
+  }
+
+  // Sort by nomor LOT descending (LOT 81 di paling atas, LOT 1 paling bawah)
+  void _sortByLotNumber(List list) {
+    list.sort((a, b) => _extractLotNumber(b).compareTo(_extractLotNumber(a)));
   }
 
   @override
@@ -57,13 +69,14 @@ class _LaporanTonasePabrikScreenState extends State<LaporanTonasePabrikScreen> {
   void _runFilter(String enteredKeyword) {
     List results = [];
     if (enteredKeyword.isEmpty) {
-      results = lots; 
+      results = List.from(lots);
     } else {
       results = lots.where((lot) =>
           lot['nama_lot'].toString().toLowerCase().contains(enteredKeyword.toLowerCase()) ||
           (lot['pabrik'] ?? '').toString().toLowerCase().contains(enteredKeyword.toLowerCase())
-      ).toList(); 
+      ).toList();
     }
+    _sortByLotNumber(results); // hasil filter ikut sort by nomor LOT
 
     setState(() {
       filteredLots = results;
