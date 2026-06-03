@@ -989,7 +989,7 @@ class _DetailPengirimanScreenState extends State<DetailPengirimanScreen> {
                                             children: [
                                               Text(it['nama_tujuan'], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black87)),
                                               const SizedBox(height: 2),
-                                              Text('T: ${formatTonase(it['tonase'])} kg • Jual: ${formatRpUp(it['harga_jual'])}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                                              Text('T: ${formatTonase(it['tonase'])} kg • Jual: ${formatRp(it['harga_jual'])}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
                                             ],
                                           ),
                                         ),

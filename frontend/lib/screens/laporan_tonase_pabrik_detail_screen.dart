@@ -272,9 +272,10 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
   }
 
   // Helper Format Uang Anti-Crash
+  // Format Rp exact (raw) — buat per-kg, harga jual, dll yang harus akurat (bukan bulat 1.000)
   String _formatUangAman(dynamic value) {
     double parsed = double.tryParse(value.toString()) ?? 0.0;
-    return formatRpUp(parsed);
+    return formatRp(parsed);
   }
 
   // Rata-rata penyusutan LOT. Konvensi: naik (pabrik > gudang) = plus/hijau,
@@ -669,7 +670,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
                                                 const Text('Timbangan Gudang', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
                                                 const SizedBox(height: 4),
                                                 Text('${formatTonase(s['total_tonase_gudang'])} Kg', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.black87)),
-                                                Text(_formatUangAman(s['total_uang_gudang']), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
+                                                Text(formatRpUp(s['total_uang_gudang']), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
                                               ],
                                             ),
                                             Column(

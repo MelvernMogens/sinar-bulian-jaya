@@ -582,7 +582,7 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                                                   Text(it['nama'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87), overflow: TextOverflow.ellipsis),
                                                   const SizedBox(height: 4),
                                                   // Nunjukin Tonase dan Harga Beli (Dasar)
-                                                  Text('${formatTonase(it['tonase'])} Kg • Beli: ${formatRpUp(it['harga'])}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                                                  Text('${formatTonase(it['tonase'])} Kg • Beli: ${formatRp(it['harga'])}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
                                                   if ((it['no_telp'] ?? '').toString().trim().isNotEmpty) ...[
                                                     const SizedBox(height: 3),
                                                     Row(children: [
@@ -609,7 +609,7 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                   decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(4)),
-                                                  child: Text('Modal: ${formatRpUp(it['harga_jual'])}', style: TextStyle(fontSize: 10, color: Colors.amber.shade700, fontWeight: FontWeight.bold)),
+                                                  child: Text('Modal: ${formatRp(it['harga_jual'])}', style: TextStyle(fontSize: 10, color: Colors.amber.shade700, fontWeight: FontWeight.bold)),
                                                 ),
                                               ],
                                             )

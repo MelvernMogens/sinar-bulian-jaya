@@ -1486,18 +1486,21 @@ def get_lots(request):
     data = []
     for l in lots:
         pengirimans = Pengiriman.objects.filter(lot=l)
-        t_uang, t_tonase_pabrik = Decimal('0'), Decimal('0')
+        t_uang_raw, t_uang, t_tonase_pabrik = Decimal('0'), Decimal('0'), Decimal('0')
         t_gudang_ditimbang, t_pabrik_ditimbang = Decimal('0'), Decimal('0')
         for p in pengirimans:
             ton_p = (p.tonase_pabrik or Decimal('0'))
             ton_g = sum([i.tonase for i in p.items.all()])
             t_tonase_pabrik += ton_p
-            # Sum dari item-item yang udah dibulatin ke 1.000 (biar konsisten sama display per-item)
-            for item in p.items.all(): t_uang += round_up_ribuan(item.total_harga)
+            # t_uang_raw = sum mentah (buat hitung modal/kg yang EXACT)
+            # t_uang     = sum dari item rounded-up 1.000 (buat display total yang KONSISTEN)
+            for item in p.items.all():
+                t_uang_raw += item.total_harga
+                t_uang += round_up_ribuan(item.total_harga)
             if ton_p > 0 and ton_g > 0:
                 t_gudang_ditimbang += ton_g
                 t_pabrik_ditimbang += ton_p
-        harga_modal = float(t_uang / t_tonase_pabrik) if t_tonase_pabrik > 0 else 0.0
+        harga_modal = float(t_uang_raw / t_tonase_pabrik) if t_tonase_pabrik > 0 else 0.0
         avg_penyusutan_pct = float((t_pabrik_ditimbang - t_gudang_ditimbang) / t_gudang_ditimbang * 100) if t_gudang_ditimbang > 0 else 0.0
         data.append({'id': l.id, 'nama_lot': l.nama_lot, 'tanggal': l.tanggal_buat.strftime('%Y-%m-%d'), 'pabrik': l.pabrik or '-', 'total_uang_gudang': float(t_uang), 'total_tonase_pabrik': float(t_tonase_pabrik), 'harga_modal': harga_modal, 'harga_jual_pabrik': float(l.harga_jual_pabrik or 0), 'avg_penyusutan_pct': avg_penyusutan_pct, 'is_selesai': l.is_selesai, 'jumlah_truk': pengirimans.count()})
     return JsonResponse(data, safe=False)
@@ -1566,13 +1569,15 @@ def get_lot_detail(request, lot_id):
     try:
         lot = LotPabrik.objects.get(id=lot_id)
         pengirimans = Pengiriman.objects.filter(lot=lot).order_by('tanggal_kirim', 'tanggal')
-        items_data, t_uang_lot, t_tonase_pabrik_lot, t_tonase_gudang_lot = [], Decimal('0'), Decimal('0'), Decimal('0')
+        items_data, t_uang_lot_raw, t_uang_lot, t_tonase_pabrik_lot, t_tonase_gudang_lot = [], Decimal('0'), Decimal('0'), Decimal('0'), Decimal('0')
         t_gudang_ditimbang, t_pabrik_ditimbang = Decimal('0'), Decimal('0')  # cuma yang udah ada tonase pabrik
         for p in pengirimans:
-            # uang per pengiriman = sum dari item-item yang dibulatin ke 1.000 (biar konsisten sama display per-item)
+            # uang_g (display) = sum item rounded-up. uang_g_raw (modal calc) = sum mentah.
+            uang_g_raw = sum([i.total_harga for i in p.items.all()], Decimal('0'))
             uang_g = sum([round_up_ribuan(i.total_harga) for i in p.items.all()], Decimal('0'))
             ton_g = sum([i.tonase for i in p.items.all()])
             ton_p = p.tonase_pabrik or Decimal('0')
+            t_uang_lot_raw += uang_g_raw
             t_uang_lot += uang_g; t_tonase_pabrik_lot += ton_p; t_tonase_gudang_lot += ton_g
             # Penyusutan per mobil (cuma kalau udah ditimbang di pabrik).
             # Konvensi: pabrik - gudang. Naik (pabrik > gudang) = plus, turun/susut = minus.
@@ -1584,9 +1589,9 @@ def get_lot_detail(request, lot_id):
                 t_pabrik_ditimbang += ton_p
             tgl_efektif = p.tanggal_kirim or p.tanggal
             items_data.append({'pengiriman_id': p.id, 'tanggal': tgl_efektif.strftime('%Y-%m-%d'), 'plat_mobil': p.plat_mobil or p.nama_stock, 'total_tonase_gudang': float(ton_g), 'total_uang_gudang': float(uang_g), 'tonase_pabrik': float(ton_p), 'penyusutan_kg': penyusutan_kg, 'penyusutan_pct': penyusutan_pct})
-        # Harga modal: pabrik (pakai tonase pabrik) & gudang (pakai tonase gudang)
-        harga_modal_pabrik = float(t_uang_lot / t_tonase_pabrik_lot) if t_tonase_pabrik_lot > 0 else 0.0
-        harga_modal_gudang = float(t_uang_lot / t_tonase_gudang_lot) if t_tonase_gudang_lot > 0 else 0.0
+        # Harga modal: pakai t_uang_lot_raw (EXACT, biar per-kg ga inflated dari rounding)
+        harga_modal_pabrik = float(t_uang_lot_raw / t_tonase_pabrik_lot) if t_tonase_pabrik_lot > 0 else 0.0
+        harga_modal_gudang = float(t_uang_lot_raw / t_tonase_gudang_lot) if t_tonase_gudang_lot > 0 else 0.0
         # Rata-rata penyusutan LOT (pabrik - gudang). Naik = plus, turun = minus.
         avg_penyusutan_pct = float((t_pabrik_ditimbang - t_gudang_ditimbang) / t_gudang_ditimbang * 100) if t_gudang_ditimbang > 0 else 0.0
         total_penyusutan_kg = float(t_pabrik_ditimbang - t_gudang_ditimbang)
