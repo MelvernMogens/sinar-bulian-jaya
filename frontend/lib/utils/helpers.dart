@@ -15,6 +15,37 @@ String formatRp(dynamic number) {
   return isNegative ? '- Rp $result' : 'Rp $result';
 }
 
+// Format teks keterangan log: buang trailing .0/.00/.000 (artefak Python Decimal)
+// dan tambah pemisah ribuan ke angka panjang. Aman terhadap angka yang udah pakai dot ribuan
+// (mis. "1.000.000" tetap utuh) dan ID seperti "#15" (tidak ke-format).
+String formatKeteranganNumbers(String text) {
+  // Pass 1: buang trailing .0+ dari angka (mis. "4500.00" -> "4500")
+  // Lookbehind: angka tidak diawali dot/digit (biar gak ngutak-atik "1.000.000")
+  // Lookahead negatif: setelah .0+ bukan digit atau dot (biar gak motong "1.000" dari "1.000.000")
+  String result = text.replaceAllMapped(
+    RegExp(r'(?<![\d.])(\d+)\.0+(?![\d.])'),
+    (m) => m.group(1)!,
+  );
+  // Pass 2: tambah pemisah ribuan ke integer 4-12 digit yang berdiri sendiri.
+  // - skip angka berawalan 0 + digit (telp Indonesia kayak "08123...")
+  // - skip 13+ digit (umumnya nomor rek/telp panjang, bukan jumlah Rp)
+  result = result.replaceAllMapped(
+    RegExp(r'(?<![\d.#])(?!0\d)(\d{4,12})(?![\d.])'),
+    (m) {
+      final raw = m.group(1)!;
+      String out = '';
+      int count = 0;
+      for (int i = raw.length - 1; i >= 0; i--) {
+        if (count != 0 && count % 3 == 0) out = '.$out';
+        out = raw[i] + out;
+        count++;
+      }
+      return out;
+    },
+  );
+  return result;
+}
+
 // Bulatkan keatas ke kelipatan 1.000 dan return double (bukan string).
 // Buat hitung total: tiap item dibulatin dulu baru di-jumlah, biar konsisten sama display.
 double ceilRibu(dynamic number) {

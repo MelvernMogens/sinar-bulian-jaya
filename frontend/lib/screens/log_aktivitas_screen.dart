@@ -39,11 +39,14 @@ class _LogAktivitasScreenState extends State<LogAktivitasScreen> {
   }
 
   // --- HELPER WARNA & ICON OTOMATIS BERDASARKAN MODUL ---
+  // Urutan check penting: kasbon harus dicek sebelum kas (krn substring overlap)
   Color _getModulColor(String modul) {
     String m = modul.toLowerCase();
     if (m.contains('nota')) return Colors.blue.shade600;
     if (m.contains('pengeluaran')) return Colors.red.shade600;
+    if (m.contains('kasbon')) return Colors.brown.shade600;
     if (m.contains('kas')) return Colors.green.shade600;
+    if (m.contains('pelanggan')) return Colors.cyan.shade700;
     if (m.contains('lot')) return Colors.purple.shade600;
     if (m.contains('pengiriman')) return Colors.orange.shade700;
     return Colors.teal.shade700;
@@ -53,10 +56,30 @@ class _LogAktivitasScreenState extends State<LogAktivitasScreen> {
     String m = modul.toLowerCase();
     if (m.contains('nota')) return Icons.receipt_long_rounded;
     if (m.contains('pengeluaran')) return Icons.money_off_rounded;
+    if (m.contains('kasbon')) return Icons.savings_rounded;
     if (m.contains('kas')) return Icons.account_balance_wallet_rounded;
+    if (m.contains('pelanggan')) return Icons.person_rounded;
     if (m.contains('lot')) return Icons.factory_rounded;
     if (m.contains('pengiriman')) return Icons.local_shipping_rounded;
     return Icons.edit_note_rounded;
+  }
+
+  // Badge AKSI (EDIT = kuning / HAPUS = merah)
+  Widget _buildAksiBadge(String aksi) {
+    final String aksiUpper = aksi.toUpperCase();
+    final bool isHapus = aksiUpper == 'HAPUS';
+    final Color bg = isHapus ? Colors.red.shade50 : Colors.amber.shade50;
+    final Color fg = isHapus ? Colors.red.shade700 : Colors.amber.shade800;
+    final Color border = isHapus ? Colors.red.shade200 : Colors.amber.shade200;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: border),
+      ),
+      child: Text(aksiUpper, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: fg, letterSpacing: 0.5)),
+    );
   }
 
   @override
@@ -241,13 +264,18 @@ class _LogAktivitasScreenState extends State<LogAktivitasScreen> {
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text('${log['modul']}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.black87, letterSpacing: -0.2)),
+                                              Row(
+                                                children: [
+                                                  Flexible(child: Text('${log['modul']}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.black87, letterSpacing: -0.2), overflow: TextOverflow.ellipsis)),
+                                                  const SizedBox(width: 8),
+                                                  _buildAksiBadge(log['aksi']?.toString() ?? 'EDIT'),
+                                                ],
+                                              ),
                                               const SizedBox(height: 2),
                                               Text('${log['waktu']}', style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
                                             ],
                                           ),
                                         ),
-                                        Icon(Icons.chevron_right_rounded, color: Colors.grey.shade300, size: 20),
                                       ],
                                     ),
                                     
@@ -264,7 +292,7 @@ class _LogAktivitasScreenState extends State<LogAktivitasScreen> {
                                         const SizedBox(width: 6),
                                         Expanded(
                                           child: Text(
-                                            '${log['keterangan']}', 
+                                            formatKeteranganNumbers(log['keterangan']?.toString() ?? ''),
                                             style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.5, fontWeight: FontWeight.w500),
                                           ),
                                         ),
