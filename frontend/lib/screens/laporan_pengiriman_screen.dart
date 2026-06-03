@@ -231,9 +231,11 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
     if (tonaseAwal.endsWith('.0')) tonaseAwal = tonaseAwal.replaceAll('.0', '');
     
     String hargaAwal = _formatAwal(item['harga'] ?? item['harga_jual'] ?? '0');
+    String modalAwal = _formatAwal(item['harga_jual'] ?? '0');
 
     final tonaseCtrl = TextEditingController(text: tonaseAwal);
     final hargaCtrl = TextEditingController(text: hargaAwal);
+    final modalCtrl = TextEditingController(text: modalAwal);
 
     showDialog(
       context: context,
@@ -272,7 +274,16 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text('Sistem akan otomatis menambahkan Rp 200/Kg untuk Harga Jual Pabrik.', style: TextStyle(fontSize: 10, color: Colors.grey, height: 1.4)),
+                Container(
+                  decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.amber.shade200)),
+                  child: TextField(
+                    controller: modalCtrl, keyboardType: TextInputType.number, inputFormatters: [RibuanFormatter()],
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                    decoration: const InputDecoration(labelText: 'Modal/Kg (override margin)', prefixText: 'Rp ', border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text('Modal bisa di-override manual. Kalau tidak diisi (kosong), otomatis = Beli + Rp 200/Kg.', style: TextStyle(fontSize: 10, color: Colors.grey, height: 1.4)),
               ],
             ),
             actionsPadding: const EdgeInsets.only(bottom: 16, right: 16, left: 16),
@@ -289,7 +300,8 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                   
                   String hargaMurni = hargaCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
                   String tonaseMurni = tonaseCtrl.text.replaceAll(',', '.').replaceAll(RegExp(r'[^0-9\.]'), '');
-                  
+                  String modalMurni = modalCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+
                   try {
                     // --- KUNCI SAKTI: TARIK NAMA KASIR DARI MEMORI ---
                     final prefs = await SharedPreferences.getInstance();
@@ -299,9 +311,11 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                       Uri.parse('${AppConfig.baseUrl}/api/pengiriman/item/edit/'),
                       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
                       body: json.encode({
-                        'item_id': item['id'], 
+                        'item_id': item['id'],
                         'tonase': tonaseMurni,
                         'harga': hargaMurni,
+                        // Modal/Kg override: hanya dikirim kalau diisi. Backend fallback ke Beli + 200 kalau kosong.
+                        if (modalMurni.isNotEmpty) 'harga_jual': modalMurni,
                         'username': currentUsername, // <--- KIRIM KE DJANGO
                       })
                     );

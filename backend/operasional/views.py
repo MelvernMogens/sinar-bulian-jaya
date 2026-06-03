@@ -1138,23 +1138,36 @@ def edit_item_pengiriman(request):
         try:
             data = json.loads(request.body)
             item = ItemPengiriman.objects.get(id=data['item_id'])
-            
+
             old_tonase = item.tonase
             old_harga = item.harga_input
-            
+            old_harga_jual = item.harga_jual
+
             item.tonase = Decimal(str(data.get('tonase', item.tonase)))
             item.harga_input = Decimal(str(data.get('harga', item.harga_input)))
-            item.harga_jual = item.harga_input + Decimal('200')
+            # Kalau frontend kirim harga_jual (modal override), pakai itu.
+            # Kalau enggak, hitung otomatis = harga_input + 200 (default margin).
+            if 'harga_jual' in data and data.get('harga_jual') not in (None, ''):
+                item.harga_jual = Decimal(str(data.get('harga_jual')))
+            else:
+                item.harga_jual = item.harga_input + Decimal('200')
             item.total_harga = item.tonase * item.harga_jual
             item.save()
-            
+
             username = data.get('username')
             if username:
                 editor = User.objects.filter(username=username).first()
-                if old_tonase != item.tonase or old_harga != item.harga_input:
-                    keterangan_log = f"Edit Muatan [{item.nama_tujuan}] di Truk {item.pengiriman.plat_mobil or item.pengiriman.nama_stock} | Tonase: {old_tonase}->{item.tonase} Kg | Harga Beli: {old_harga}->{item.harga_input}"
+                changes = []
+                if old_tonase != item.tonase:
+                    changes.append(f"Tonase: {old_tonase}->{item.tonase} Kg")
+                if old_harga != item.harga_input:
+                    changes.append(f"Beli: {old_harga}->{item.harga_input}")
+                if old_harga_jual != item.harga_jual:
+                    changes.append(f"Modal: {old_harga_jual}->{item.harga_jual}")
+                if changes:
+                    keterangan_log = f"Edit Muatan [{item.nama_tujuan}] di Truk {item.pengiriman.plat_mobil or item.pengiriman.nama_stock} | " + " | ".join(changes)
                     LogAktivitas.objects.create(user=editor, modul='Pengiriman', aksi='EDIT', keterangan=keterangan_log)
-            
+
             return JsonResponse({'status': 'sukses'})
         except Exception as e:
             return JsonResponse({'status': 'gagal', 'pesan': str(e)}, status=400)
