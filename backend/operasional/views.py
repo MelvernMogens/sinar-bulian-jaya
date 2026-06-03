@@ -1492,7 +1492,8 @@ def get_lots(request):
             ton_p = (p.tonase_pabrik or Decimal('0'))
             ton_g = sum([i.tonase for i in p.items.all()])
             t_tonase_pabrik += ton_p
-            for item in p.items.all(): t_uang += item.total_harga
+            # Sum dari item-item yang udah dibulatin ke 1.000 (biar konsisten sama display per-item)
+            for item in p.items.all(): t_uang += round_up_ribuan(item.total_harga)
             if ton_p > 0 and ton_g > 0:
                 t_gudang_ditimbang += ton_g
                 t_pabrik_ditimbang += ton_p
@@ -1568,7 +1569,10 @@ def get_lot_detail(request, lot_id):
         items_data, t_uang_lot, t_tonase_pabrik_lot, t_tonase_gudang_lot = [], Decimal('0'), Decimal('0'), Decimal('0')
         t_gudang_ditimbang, t_pabrik_ditimbang = Decimal('0'), Decimal('0')  # cuma yang udah ada tonase pabrik
         for p in pengirimans:
-            uang_g, ton_g, ton_p = sum([i.total_harga for i in p.items.all()]), sum([i.tonase for i in p.items.all()]), p.tonase_pabrik or Decimal('0')
+            # uang per pengiriman = sum dari item-item yang dibulatin ke 1.000 (biar konsisten sama display per-item)
+            uang_g = sum([round_up_ribuan(i.total_harga) for i in p.items.all()], Decimal('0'))
+            ton_g = sum([i.tonase for i in p.items.all()])
+            ton_p = p.tonase_pabrik or Decimal('0')
             t_uang_lot += uang_g; t_tonase_pabrik_lot += ton_p; t_tonase_gudang_lot += ton_g
             # Penyusutan per mobil (cuma kalau udah ditimbang di pabrik).
             # Konvensi: pabrik - gudang. Naik (pabrik > gudang) = plus, turun/susut = minus.
