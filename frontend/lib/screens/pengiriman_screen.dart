@@ -949,7 +949,7 @@ class _DetailPengirimanScreenState extends State<DetailPengirimanScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Text(formatRp(data!['total_uang']), style: TextStyle(color: Colors.amber.shade400, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                                Text(formatRpUp(data!['total_uang']), style: TextStyle(color: Colors.amber.shade400, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                               ]
                             ),
                           ],
@@ -989,11 +989,11 @@ class _DetailPengirimanScreenState extends State<DetailPengirimanScreen> {
                                             children: [
                                               Text(it['nama_tujuan'], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black87)),
                                               const SizedBox(height: 2),
-                                              Text('T: ${formatTonase(it['tonase'])} kg • Jual: ${formatRp(it['harga_jual'])}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                                              Text('T: ${formatTonase(it['tonase'])} kg • Jual: ${formatRpUp(it['harga_jual'])}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
                                             ],
                                           ),
                                         ),
-                                        Text(formatRp(it['total_harga']), style: TextStyle(fontWeight: FontWeight.w900, color: Colors.teal.shade700, fontSize: 14)),
+                                        Text(formatRpUp(it['total_harga']), style: TextStyle(fontWeight: FontWeight.w900, color: Colors.teal.shade700, fontSize: 14)),
                                       ],
                                     ),
                                   ),

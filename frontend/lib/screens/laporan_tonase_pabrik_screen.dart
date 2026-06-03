@@ -288,7 +288,7 @@ class _LaporanTonasePabrikScreenState extends State<LaporanTonasePabrikScreen> {
                                               Row(
                                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                 children: [
-                                                  _buildColumnStats('Total Gudang', formatRp(l['total_uang_gudang'] ?? 0)),
+                                                  _buildColumnStats('Total Gudang', formatRpUp(l['total_uang_gudang'] ?? 0)),
                                                   _buildColumnStats('Timbangan', '${formatTonase(l['total_tonase_pabrik'] ?? 0)} Kg'),
                                                 ],
                                               ),

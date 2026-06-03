@@ -274,7 +274,7 @@ class _LaporanTonasePabrikDetailScreenState extends State<LaporanTonasePabrikDet
   // Helper Format Uang Anti-Crash
   String _formatUangAman(dynamic value) {
     double parsed = double.tryParse(value.toString()) ?? 0.0;
-    return formatRp(parsed);
+    return formatRpUp(parsed);
   }
 
   // Rata-rata penyusutan LOT. Konvensi: naik (pabrik > gudang) = plus/hijau,

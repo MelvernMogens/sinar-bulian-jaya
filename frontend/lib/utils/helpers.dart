@@ -15,6 +15,22 @@ String formatRp(dynamic number) {
   return isNegative ? '- Rp $result' : 'Rp $result';
 }
 
+// Format Rp dengan round UP ke kelipatan 1.000. Contoh: 1100 -> "Rp 2.000", 999 -> "Rp 1.000"
+String formatRpUp(dynamic number) {
+  double value = double.tryParse(number.toString()) ?? 0;
+  bool isNegative = value < 0;
+  double rounded = (value.abs() / 1000).ceil() * 1000.0;
+  String str = rounded.toInt().toString();
+  String result = '';
+  int count = 0;
+  for (int i = str.length - 1; i >= 0; i--) {
+    if (count != 0 && count % 3 == 0) result = '.$result';
+    result = str[i] + result;
+    count++;
+  }
+  return isNegative ? '- Rp $result' : 'Rp $result';
+}
+
 // Format angka biasa dengan pemisah ribuan (titik), tanpa "Rp". Contoh: 1000 -> 1.000
 String formatRibuan(dynamic number) {
   double value = double.tryParse(number.toString()) ?? 0;
