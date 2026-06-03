@@ -330,8 +330,27 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
     return "${tgl.day.toString().padLeft(2, '0')}/${tgl.month.toString().padLeft(2, '0')}/${tgl.year}";
   }
 
+  // Total omset = jumlah dari TIAP item yang sudah dibulatin (biar konsisten sama display per item).
+  // Bukan sum mentah baru dibulatin sekali — itu bikin total ga match sama jumlah item-itemnya.
   double hitungTotalUang(List list) {
-    return list.fold(0, (sum, item) => sum + (double.tryParse(item['total_uang'].toString()) ?? 0));
+    double total = 0;
+    for (var p in list) {
+      final items = (p['items'] as List?) ?? [];
+      for (var it in items) {
+        total += ceilRibu(it['total']);
+      }
+    }
+    return total;
+  }
+
+  // Total uang per pengiriman = sum dari rounded items dalam pengiriman itu.
+  double hitungTotalPengiriman(Map p) {
+    final items = (p['items'] as List?) ?? [];
+    double total = 0;
+    for (var it in items) {
+      total += ceilRibu(it['total']);
+    }
+    return total;
   }
 
   double hitungTotalTonase(List list) {
@@ -498,7 +517,7 @@ class _LaporanPengirimanScreenState extends State<LaporanPengirimanScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Tonase: ${formatTonase(p['total_tonase'])} Kg  •  Omset: ${formatRpUp(p['total_uang'])}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12, height: 1.4, fontWeight: FontWeight.w500)),
+                                Text('Tonase: ${formatTonase(p['total_tonase'])} Kg  •  Omset: ${formatRpUp(hitungTotalPengiriman(p))}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12, height: 1.4, fontWeight: FontWeight.w500)),
                                 const SizedBox(height: 4),
                                 InkWell(
                                   onTap: () => _pilihLotUntukPengiriman(p['id'], p['lot_id'], p['nama_lot']),

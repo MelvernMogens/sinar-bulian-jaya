@@ -949,7 +949,7 @@ class _DetailPengirimanScreenState extends State<DetailPengirimanScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Text(formatRpUp(data!['total_uang']), style: TextStyle(color: Colors.amber.shade400, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                                Text(formatRpUp(items.fold<double>(0, (s, it) => s + ceilRibu(it['total_harga']))), style: TextStyle(color: Colors.amber.shade400, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                               ]
                             ),
                           ],

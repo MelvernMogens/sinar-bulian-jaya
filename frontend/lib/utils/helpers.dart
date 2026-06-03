@@ -15,6 +15,14 @@ String formatRp(dynamic number) {
   return isNegative ? '- Rp $result' : 'Rp $result';
 }
 
+// Bulatkan keatas ke kelipatan 1.000 dan return double (bukan string).
+// Buat hitung total: tiap item dibulatin dulu baru di-jumlah, biar konsisten sama display.
+double ceilRibu(dynamic number) {
+  double value = double.tryParse(number.toString()) ?? 0;
+  if (value == 0) return 0;
+  return (value.abs() / 1000).ceil() * 1000.0 * (value < 0 ? -1 : 1);
+}
+
 // Format Rp dengan round UP ke kelipatan 1.000. Contoh: 1100 -> "Rp 2.000", 999 -> "Rp 1.000"
 String formatRpUp(dynamic number) {
   double value = double.tryParse(number.toString()) ?? 0;
