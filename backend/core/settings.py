@@ -19,12 +19,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env')
 
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY',
-    'django-insecure-w8z@=mr%nrhzi&w7!nydm_fh&4k1#ge74%e!!!0z(d#7x6j$t4',
-)
-
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
+
+# SECRET_KEY must come from the environment (.env) in production.
+# For local development (DEBUG=True) a random throwaway key is generated if unset.
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if not DEBUG:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured('SECRET_KEY is not set (add it to backend/.env).')
+    from django.core.management.utils import get_random_secret_key
+    SECRET_KEY = get_random_secret_key()
 
 ALLOWED_HOSTS = [
     h.strip() for h in os.environ.get(
